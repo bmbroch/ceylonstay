@@ -22,7 +22,6 @@ interface Property {
 export default function Home() {
   const [properties, setProperties] = useState<Property[]>([])
   const [activeImageIndexes, setActiveImageIndexes] = useState<{ [key: string]: number }>({})
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -31,7 +30,15 @@ export default function Home() {
         const listings = await getDocuments('ceylonstays')
         setProperties(listings.map(doc => ({
           id: doc.id,
-          ...doc
+          title: doc.title || '',
+          description: doc.description || '',
+          location: doc.location || '',
+          bathrooms: doc.bathrooms || 0,
+          bedrooms: doc.bedrooms || 0,
+          maxGuests: doc.maxGuests || 0,
+          pricePerNight: doc.pricePerNight || 0,
+          photos: doc.photos || [],
+          createdAt: doc.createdAt || ''
         })))
       } catch (error) {
         console.error('Error fetching properties:', error)
@@ -55,18 +62,6 @@ export default function Home() {
       ...prev,
       [propertyId]: ((prev[propertyId] || 0) - 1 + properties.find(p => p.id === propertyId)!.photos.length) % properties.find(p => p.id === propertyId)!.photos.length
     }))
-  }
-
-  const toggleFavorite = (propertyId: string) => {
-    setFavorites(prev => {
-      const next = new Set(prev)
-      if (next.has(propertyId)) {
-        next.delete(propertyId)
-      } else {
-        next.add(propertyId)
-      }
-      return next
-    })
   }
 
   if (isLoading) {
@@ -99,22 +94,6 @@ export default function Home() {
                 </div>
               ))}
               
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-3 top-3 z-10 backdrop-blur-sm bg-white/30 hover:bg-white/50"
-                onClick={(e) => {
-                  e.preventDefault()
-                  toggleFavorite(property.id)
-                }}
-              >
-                <Heart
-                  className={`h-5 w-5 ${
-                    favorites.has(property.id) ? 'fill-red-500 stroke-red-500' : 'stroke-white'
-                  }`}
-                />
-              </Button>
-
               {property.photos.length > 1 && (
                 <>
                   <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
