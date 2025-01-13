@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Heart, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import Image from 'next/image'
 
 interface Property {
   id: number
@@ -112,10 +113,12 @@ export default function Home() {
                     (activeImageIndexes[property.id] || 0) === idx ? 'opacity-100' : 'opacity-0'
                   }`}
                 >
-                  <img
+                  <Image
                     src={image}
                     alt={`${property.location} ${idx + 1}`}
-                    className="h-full w-full object-cover"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 </div>
               ))}
