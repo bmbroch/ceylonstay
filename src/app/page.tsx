@@ -6,17 +6,30 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { getDocuments } from '@/lib/firebase/firebaseUtils'
 
+interface FirebaseDoc {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  bathrooms: number;
+  bedrooms: number;
+  maxGuests: number;
+  pricePerNight: number;
+  photos: string[];
+  createdAt: string;
+}
+
 interface Property {
-  id: string
-  title: string
-  description: string
-  location: string
-  bathrooms: number
-  bedrooms: number
-  maxGuests: number
-  pricePerNight: number
-  photos: string[]
-  createdAt: string
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  bathrooms: number;
+  bedrooms: number;
+  maxGuests: number;
+  pricePerNight: number;
+  photos: string[];
+  createdAt: string;
 }
 
 export default function Home() {
@@ -27,7 +40,7 @@ export default function Home() {
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const listings = await getDocuments('ceylonstays')
+        const listings = await getDocuments('ceylonstays') as FirebaseDoc[]
         setProperties(listings.map(doc => ({
           id: doc.id,
           title: doc.title || '',
