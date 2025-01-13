@@ -116,9 +116,11 @@ export default function Home() {
                   <Image
                     src={image}
                     alt={`${property.location} ${idx + 1}`}
-                    fill
-                    className="object-cover"
+                    width={800}
+                    height={800}
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    priority={idx === 0}
+                    className="object-cover w-full h-full"
                   />
                 </div>
               ))}
