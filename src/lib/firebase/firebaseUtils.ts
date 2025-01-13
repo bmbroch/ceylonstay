@@ -48,7 +48,36 @@ export const deleteDocument = (collectionName: string, id: string) =>
 
 // Storage functions
 export const uploadFile = async (file: File, path: string) => {
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+  try {
+    const storageRef = ref(storage, path);
+    
+    // Add metadata to the upload
+    const metadata = {
+      contentType: file.type,
+      customMetadata: {
+        originalName: file.name,
+        size: file.size.toString(),
+        uploadedAt: new Date().toISOString(),
+      },
+    };
+
+    // Upload the file with metadata
+    const snapshot = await uploadBytes(storageRef, file, metadata);
+    
+    // Get the download URL
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    
+    return downloadURL;
+  } catch (error: any) {
+    console.error("Error uploading file:", error);
+    // Add more specific error handling
+    if (error.code === 'storage/unauthorized') {
+      throw new Error('Permission denied. Please check Firebase Storage rules.');
+    } else if (error.code === 'storage/canceled') {
+      throw new Error('Upload was canceled.');
+    } else if (error.code === 'storage/unknown') {
+      throw new Error('Unknown error occurred during upload.');
+    }
+    throw error;
+  }
 };
