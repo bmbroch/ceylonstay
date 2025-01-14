@@ -2,16 +2,16 @@
 
 import React from 'react';
 import Image from 'next/image';
-// Import Swiper React components
-import { Swiper, SwiperSlide } from 'swiper/react';
-
-// Import required modules
-import { Navigation, Pagination } from 'swiper/modules';
 
 // Import Swiper styles
-import 'swiper/swiper.min.css';
+import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
+
+// Import Swiper core and required modules
+import SwiperCore from 'swiper';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Navigation, Pagination } from 'swiper/modules';
 
 interface ImageCarouselProps {
   images: string[];
