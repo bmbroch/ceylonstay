@@ -29,11 +29,24 @@ export const metadata: Metadata = {
         url: '/ceylonstay_social_graph.png',
         width: 500,
         height: 200,
-        alt: "CeylonStay - Trusted Sri Lankan rentals"
+        alt: "CeylonStay - Trusted Sri Lankan rentals",
+        type: 'image/png',
+        secureUrl: 'https://ceylonstay.com/ceylonstay_social_graph.png'
       }
     ],
     type: "website",
     locale: 'en_US',
+  },
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'format-detection': 'telephone=no',
+    'apple-mobile-web-app-title': 'CeylonStay',
+    'og:image': 'https://ceylonstay.com/ceylonstay_social_graph.png',
+    'og:image:secure_url': 'https://ceylonstay.com/ceylonstay_social_graph.png',
+    'og:image:type': 'image/png',
+    'og:image:width': '500',
+    'og:image:height': '200',
   },
   twitter: {
     card: "summary_large_image",
