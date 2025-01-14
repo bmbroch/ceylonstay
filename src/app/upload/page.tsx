@@ -177,12 +177,11 @@ export default function UploadPage() {
         photos: photoUrls,
         isListed: true,
         availableDate: formData.availableDate,
-        createdAt: new Date().toISOString()
+        ...(editId === 'new' ? { createdAt: new Date().toISOString() } : {})
       };
 
       // Add new document or update existing one
       if (editId && editId !== 'new') {
-        delete listingData.createdAt; // Don't update createdAt for existing listings
         await updateDocument("ceylonstays", editId, listingData);
       } else {
         await addDocument("ceylonstays", listingData);
