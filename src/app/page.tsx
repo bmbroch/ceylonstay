@@ -5,6 +5,7 @@ import { Heart, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { getDocuments } from '@/lib/firebase/firebaseUtils'
+import Image from 'next/image'
 
 interface FirebaseDoc {
   id: string;
@@ -18,6 +19,7 @@ interface FirebaseDoc {
   pricingType: 'night' | 'month';
   photos: string[];
   createdAt: string;
+  isListed: boolean;
 }
 
 interface Property {
@@ -32,6 +34,7 @@ interface Property {
   pricingType: 'night' | 'month';
   photos: string[];
   createdAt: string;
+  isListed: boolean;
 }
 
 export default function Home() {
@@ -44,19 +47,22 @@ export default function Home() {
     const fetchProperties = async () => {
       try {
         const listings = await getDocuments('ceylonstays') as FirebaseDoc[]
-        setProperties(listings.map(doc => ({
-          id: doc.id,
-          title: doc.title || '',
-          description: doc.description || '',
-          location: doc.location || '',
-          bathrooms: doc.bathrooms || 0,
-          bedrooms: doc.bedrooms || 0,
-          pricePerNight: doc.pricePerNight || 0,
-          pricePerMonth: doc.pricePerMonth || 0,
-          pricingType: doc.pricingType || 'night',
-          photos: doc.photos || [],
-          createdAt: doc.createdAt || ''
-        })))
+        setProperties(listings
+          .filter(doc => doc.isListed ?? true)
+          .map(doc => ({
+            id: doc.id,
+            title: doc.title || '',
+            description: doc.description || '',
+            location: doc.location || '',
+            bathrooms: doc.bathrooms || 0,
+            bedrooms: doc.bedrooms || 0,
+            pricePerNight: doc.pricePerNight || 0,
+            pricePerMonth: doc.pricePerMonth || 0,
+            pricingType: doc.pricingType || 'night',
+            photos: doc.photos || [],
+            createdAt: doc.createdAt || '',
+            isListed: doc.isListed ?? true
+          })))
       } catch (error) {
         console.error('Error fetching properties:', error)
       } finally {
@@ -102,11 +108,12 @@ export default function Home() {
                     (activeImageIndexes[property.id] || 0) === idx ? 'opacity-100' : 'opacity-0'
                   }`}
                 >
-                  <img
+                  <Image
                     src={photo}
                     alt={`${property.title} ${idx + 1}`}
-                    className="object-cover w-full h-full"
-                    loading={idx === 0 ? "eager" : "lazy"}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 </div>
               ))}

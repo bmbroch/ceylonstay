@@ -6,12 +6,14 @@ import { addDocument, uploadFile, getDocument, updateDocument, getDocuments } fr
 import { auth } from "@/lib/firebase/firebase";
 import { signInAnonymously } from "firebase/auth";
 import { Pencil, Plus } from "lucide-react";
+import Image from "next/image";
 
 const PASSCODE = "13579";
 
 interface Listing {
   id: string;
   title: string;
+  description: string;
   location: string;
   pricePerNight?: number;
   pricePerMonth?: number;
@@ -19,6 +21,7 @@ interface Listing {
   bedrooms: number;
   bathrooms: number;
   createdAt: string;
+  isListed: boolean;
 }
 
 export default function UploadPage() {
@@ -51,12 +54,16 @@ export default function UploadPage() {
           setListings(fetchedListings.map(doc => ({
             id: doc.id,
             title: doc.title || '',
+            description: doc.description || '',
             location: doc.location || '',
             pricePerNight: doc.pricePerNight || 0,
+            pricePerMonth: doc.pricePerMonth || 0,
+            pricingType: doc.pricingType || 'night',
             bedrooms: doc.bedrooms || 0,
             bathrooms: doc.bathrooms || 0,
-            createdAt: doc.createdAt || ''
-          })));
+            createdAt: doc.createdAt || '',
+            isListed: doc.isListed ?? true
+          } as Listing)));
         } catch (error) {
           console.error('Error loading listings:', error);
         }
@@ -170,6 +177,7 @@ export default function UploadPage() {
         ),
         pricingType: formData.pricingType,
         photos: photoUrls,
+        isListed: true,
         ...(editId ? {} : { createdAt: new Date().toISOString() })
       };
 
@@ -189,12 +197,16 @@ export default function UploadPage() {
       setListings(updatedListings.map(doc => ({
         id: doc.id,
         title: doc.title || '',
+        description: doc.description || '',
         location: doc.location || '',
         pricePerNight: doc.pricePerNight || 0,
+        pricePerMonth: doc.pricePerMonth || 0,
+        pricingType: doc.pricingType || 'night',
         bedrooms: doc.bedrooms || 0,
         bathrooms: doc.bathrooms || 0,
-        createdAt: doc.createdAt || ''
-      })));
+        createdAt: doc.createdAt || '',
+        isListed: doc.isListed ?? true
+      } as Listing)));
     } catch (error: any) {
       console.error("Error submitting listing:", error);
       setUploadError(error.message || "Error uploading listing. Please try again.");
@@ -222,6 +234,29 @@ export default function UploadPage() {
 
   const removeExistingPhoto = (index: number) => {
     setExistingPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleListingToggle = async (listingId: string, currentStatus: boolean) => {
+    try {
+      await updateDocument("ceylonstays", listingId, { isListed: !currentStatus });
+      // Refresh listings after toggle
+      const updatedListings = await getDocuments('ceylonstays');
+      setListings(updatedListings.map(doc => ({
+        id: doc.id,
+        title: doc.title || '',
+        description: doc.description || '',
+        location: doc.location || '',
+        pricePerNight: doc.pricePerNight || 0,
+        pricePerMonth: doc.pricePerMonth || 0,
+        pricingType: doc.pricingType || 'night',
+        bedrooms: doc.bedrooms || 0,
+        bathrooms: doc.bathrooms || 0,
+        createdAt: doc.createdAt || '',
+        isListed: doc.isListed ?? true
+      } as Listing)));
+    } catch (error) {
+      console.error('Error toggling listing status:', error);
+    }
   };
 
   if (!isAuthenticated) {
@@ -287,6 +322,7 @@ export default function UploadPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rooms</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -304,6 +340,18 @@ export default function UploadPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {listing.bedrooms}b {listing.bathrooms}ba
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => handleListingToggle(listing.id, listing.isListed)}
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            listing.isListed
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                        >
+                          {listing.isListed ? 'Listed' : 'Delisted'}
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(listing.createdAt).toLocaleDateString()}
@@ -479,11 +527,15 @@ export default function UploadPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {existingPhotos.map((photo, index) => (
                     <div key={index} className="relative group">
-                      <img
-                        src={photo}
-                        alt={`Existing photo ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
+                      <div className="relative w-full h-32">
+                        <Image
+                          src={photo}
+                          alt={`Existing photo ${index + 1}`}
+                          fill
+                          className="object-cover rounded-lg"
+                          sizes="(max-width: 768px) 100vw, 300px"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeExistingPhoto(index)}
