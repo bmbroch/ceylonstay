@@ -11,6 +11,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  getDoc
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -31,6 +32,18 @@ export const signInWithGoogle = async () => {
 // Firestore functions
 export const addDocument = (collectionName: string, data: any) =>
   addDoc(collection(db, collectionName), data);
+
+export const getDocument = async (collectionName: string, id: string) => {
+  const docRef = doc(db, collectionName, id);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return {
+      id: docSnap.id,
+      ...docSnap.data()
+    };
+  }
+  return null;
+};
 
 export const getDocuments = async (collectionName: string) => {
   const querySnapshot = await getDocs(collection(db, collectionName));

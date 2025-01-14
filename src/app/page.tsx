@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Heart, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Heart, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { getDocuments } from '@/lib/firebase/firebaseUtils'
@@ -13,8 +13,9 @@ interface FirebaseDoc {
   location: string;
   bathrooms: number;
   bedrooms: number;
-  maxGuests: number;
-  pricePerNight: number;
+  pricePerNight?: number;
+  pricePerMonth?: number;
+  pricingType: 'night' | 'month';
   photos: string[];
   createdAt: string;
 }
@@ -26,8 +27,9 @@ interface Property {
   location: string;
   bathrooms: number;
   bedrooms: number;
-  maxGuests: number;
-  pricePerNight: number;
+  pricePerNight?: number;
+  pricePerMonth?: number;
+  pricingType: 'night' | 'month';
   photos: string[];
   createdAt: string;
 }
@@ -36,6 +38,7 @@ export default function Home() {
   const [properties, setProperties] = useState<Property[]>([])
   const [activeImageIndexes, setActiveImageIndexes] = useState<{ [key: string]: number }>({})
   const [isLoading, setIsLoading] = useState(true)
+  const [activeDescription, setActiveDescription] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -48,8 +51,9 @@ export default function Home() {
           location: doc.location || '',
           bathrooms: doc.bathrooms || 0,
           bedrooms: doc.bedrooms || 0,
-          maxGuests: doc.maxGuests || 0,
           pricePerNight: doc.pricePerNight || 0,
+          pricePerMonth: doc.pricePerMonth || 0,
+          pricingType: doc.pricingType || 'night',
           photos: doc.photos || [],
           createdAt: doc.createdAt || ''
         })))
@@ -87,10 +91,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#fefefe] p-2 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
         {properties.map((property) => (
           <Card key={property.id} className="group relative overflow-hidden rounded-xl border-0 shadow-sm">
-            <div className="relative aspect-square overflow-hidden">
+            <div className="relative aspect-[4/3] overflow-hidden">
               {property.photos.map((photo, idx) => (
                 <div
                   key={idx}
@@ -160,12 +164,22 @@ export default function Home() {
                 <p className="text-sm text-gray-500">{property.bedrooms} bed</p>
                 <span className="text-sm text-gray-500">•</span>
                 <p className="text-sm text-gray-500">{property.bathrooms} bath</p>
-                <span className="text-sm text-gray-500">•</span>
-                <p className="text-sm text-gray-500">Max {property.maxGuests} guests</p>
+                {property.description && (
+                  <button
+                    onClick={() => setActiveDescription(activeDescription === property.description ? null : property.description)}
+                    className="ml-auto text-gray-500 hover:text-gray-700 transition-colors"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <p className="mt-2">
-                <span className="font-semibold text-black">${property.pricePerNight.toLocaleString()}</span>{' '}
-                <span className="text-gray-500">/ night</span>
+                <span className="font-semibold text-black">
+                  ${property.pricingType === 'night' 
+                    ? property.pricePerNight?.toLocaleString() 
+                    : property.pricePerMonth?.toLocaleString()}
+                </span>{' '}
+                <span className="text-gray-500">/ {property.pricingType}</span>
               </p>
               <a
                 href={`https://wa.me/94779598514?text=${encodeURIComponent(`Hey! I'm interested in ${property.title}. Can you please give me more details?`)}`}
@@ -180,6 +194,21 @@ export default function Home() {
           </Card>
         ))}
       </div>
+      
+      {/* Description Popup */}
+      {activeDescription && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setActiveDescription(null)}>
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <p className="text-gray-700 whitespace-pre-wrap">{activeDescription}</p>
+            <button
+              onClick={() => setActiveDescription(null)}
+              className="mt-4 w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
