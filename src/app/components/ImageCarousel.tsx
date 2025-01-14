@@ -10,6 +10,7 @@ interface ImageCarouselProps {
 
 export default function ImageCarousel({ images, alt = "Property image" }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [imagesLoaded, setImagesLoaded] = useState<boolean[]>(new Array(images.length).fill(false));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = () => {
@@ -21,6 +22,14 @@ export default function ImageCarousel({ images, alt = "Property image" }: ImageC
         setCurrentIndex(newIndex);
       }
     }
+  };
+
+  const handleImageLoad = (index: number) => {
+    setImagesLoaded(prev => {
+      const newState = [...prev];
+      newState[index] = true;
+      return newState;
+    });
   };
 
   return (
@@ -43,13 +52,21 @@ export default function ImageCarousel({ images, alt = "Property image" }: ImageC
             className="relative flex-[0_0_100%] w-full snap-center"
           >
             <div className="relative w-full aspect-[4/3]">
+              {!imagesLoaded[index] && (
+                <div className="absolute inset-0 bg-gray-200 animate-pulse">
+                  <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-shimmer" />
+                </div>
+              )}
               <Image
                 src={image}
                 alt={`${alt} ${index + 1}`}
                 fill
-                className="object-cover"
+                className={`object-cover transition-opacity duration-300 ${
+                  imagesLoaded[index] ? 'opacity-100' : 'opacity-0'
+                }`}
                 sizes="(max-width: 768px) 100vw, 50vw"
                 priority={index === 0}
+                onLoad={() => handleImageLoad(index)}
               />
             </div>
           </div>
@@ -78,6 +95,19 @@ export default function ImageCarousel({ images, alt = "Property image" }: ImageC
         .hide-scrollbar {
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
+        }
+
+        @keyframes shimmer {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(100%);
+          }
+        }
+
+        .animate-shimmer {
+          animation: shimmer 1.5s infinite;
         }
       `}</style>
     </div>
