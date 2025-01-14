@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     url: 'https://ceylonstay.com',
     siteName: 'CeylonStay',
     images: {
-      url: 'https://ceylonstay.com/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
+      url: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
       width: 500,
       height: 200,
       alt: "CeylonStay - Trusted Sri Lankan rentals"
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     description: "Trusted Sri Lankan rentals for 👩‍💻 digital nomads & ✈️ travelers",
     site: "@ceylonstay",
     creator: "@ceylonstay",
-    images: 'https://ceylonstay.com/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
+    images: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
   },
   viewport: {
     width: 'device-width',
