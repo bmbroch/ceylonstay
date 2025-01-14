@@ -1,30 +1,30 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { Heart, ChevronLeft, ChevronRight, Info, Search, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { getDocuments, FirebaseDoc, updateDocument } from '@/lib/firebase/firebaseUtils'
 import Image from 'next/image'
 import { imageLoader } from '@/lib/imageLoader'
+import { PropertySkeletonGrid } from '@/components/ui/property-skeleton'
 
 interface Property extends FirebaseDoc {}
 
-function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery }: { 
+function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery, index }: { 
   property: Property; 
   activeIndex: number;
   onNext: () => void;
   onPrev: () => void;
   onOpenGallery: () => void;
+  index: number;
 }) {
   const [imagesLoaded, setImagesLoaded] = useState(false);
 
   return (
     <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
       {!imagesLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-sm text-gray-500">Loading images...</div>
-        </div>
+        <div className="absolute inset-0 bg-gray-200 animate-pulse" />
       )}
       {property.photos.map((photo, idx) => (
         <div
@@ -40,9 +40,11 @@ function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery }
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority={idx === 0}
-            loading={idx === 0 ? "eager" : "lazy"}
+            priority={index < 3 && idx === 0}
+            loading={index < 3 ? "eager" : "lazy"}
             quality={75}
+            placeholder="blur"
+            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABQODxIPDRQSEBIXFRQdHx4eHRoaHSQtJSEkLzYxMC8vMTQ3PEFGNzhLOj0tRGJFS1NWW1xbOEVnaWVsdlNfYV3/2wBDARUXFx4aHR4eHV3KHy0fyt3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
             onLoad={() => setImagesLoaded(true)}
           />
         </div>
@@ -268,26 +270,59 @@ export default function Home() {
     const fetchProperties = async () => {
       try {
         const listings = await getDocuments('ceylonstays') as FirebaseDoc[]
-        setProperties(listings
-          .filter(doc => doc.isListed ?? true)
-          .map(doc => ({
-            id: doc.id,
-            title: doc.title || '',
-            description: doc.description || '',
-            location: doc.location || '',
-            bathrooms: doc.bathrooms || 0,
-            bedrooms: doc.bedrooms || 0,
-            pricePerNight: doc.pricePerNight || 0,
-            pricePerMonth: doc.pricePerMonth || 0,
-            pricingType: doc.pricingType || 'night',
-            photos: doc.photos || [],
-            createdAt: doc.createdAt || '',
-            isListed: doc.isListed ?? true,
-            availableDate: doc.availableDate || 'now'
-          })))
+        const now = new Date()
+        now.setHours(0, 0, 0, 0)
+
+        // Process data in chunks to avoid blocking the main thread
+        const processListings = () => {
+          const processed = listings
+            .filter(doc => doc.isListed ?? true)
+            .map(doc => ({
+              id: doc.id,
+              title: doc.title || '',
+              description: doc.description || '',
+              location: doc.location || '',
+              bathrooms: doc.bathrooms || 0,
+              bedrooms: doc.bedrooms || 0,
+              pricePerNight: doc.pricePerNight || 0,
+              pricePerMonth: doc.pricePerMonth || 0,
+              pricingType: doc.pricingType || 'night',
+              photos: doc.photos || [],
+              createdAt: doc.createdAt || '',
+              isListed: doc.isListed ?? true,
+              availableDate: doc.availableDate || 'now'
+            }))
+            .sort((a, b) => {
+              // Parse dates, defaulting to now if invalid
+              const dateA = new Date(a.availableDate)
+              const dateB = new Date(b.availableDate)
+              const validDateA = isNaN(dateA.getTime()) ? now : dateA
+              const validDateB = isNaN(dateB.getTime()) ? now : dateB
+
+              validDateA.setHours(0, 0, 0, 0)
+              validDateB.setHours(0, 0, 0, 0)
+
+              const isAvailableNowA = validDateA <= now
+              const isAvailableNowB = validDateB <= now
+
+              if (isAvailableNowA && !isAvailableNowB) return -1
+              if (!isAvailableNowA && isAvailableNowB) return 1
+
+              return validDateA.getTime() - validDateB.getTime()
+            });
+
+          setProperties(processed);
+          setIsLoading(false);
+        };
+
+        // Use requestIdleCallback for non-critical processing
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(processListings);
+        } else {
+          setTimeout(processListings, 0);
+        }
       } catch (error) {
         console.error('Error fetching properties:', error)
-      } finally {
         setIsLoading(false)
       }
     }
@@ -295,19 +330,20 @@ export default function Home() {
     fetchProperties()
   }, [])
 
-  const nextImage = (propertyId: string) => {
+  // Memoize image navigation functions to prevent unnecessary re-renders
+  const nextImage = useCallback((propertyId: string) => {
     setActiveImageIndexes(prev => ({
       ...prev,
       [propertyId]: ((prev[propertyId] || 0) + 1) % properties.find(p => p.id === propertyId)!.photos.length
     }))
-  }
+  }, [properties])
 
-  const prevImage = (propertyId: string) => {
+  const prevImage = useCallback((propertyId: string) => {
     setActiveImageIndexes(prev => ({
       ...prev,
       [propertyId]: ((prev[propertyId] || 0) - 1 + properties.find(p => p.id === propertyId)!.photos.length) % properties.find(p => p.id === propertyId)!.photos.length
     }))
-  }
+  }, [properties])
 
   const handleToggleStatus = async (propertyId: string, currentStatus: boolean) => {
     try {
@@ -323,26 +359,14 @@ export default function Home() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} className="group overflow-hidden animate-pulse">
-              <div className="aspect-[4/3] bg-gray-200" />
-              <div className="p-4 space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
-                <div className="h-4 bg-gray-200 rounded w-1/4" />
-                <div className="h-8 bg-gray-200 rounded" />
-              </div>
-            </Card>
-          ))}
-        </div>
+        <PropertySkeletonGrid />
       </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-white p-2 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
+    <main className="min-h-screen bg-white px-1 py-2 md:p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 max-w-7xl mx-auto">
         {properties.map((property) => (
           <Card key={property.id} className="group overflow-hidden">
             <Suspense fallback={
@@ -356,6 +380,7 @@ export default function Home() {
                 onNext={() => nextImage(property.id)}
                 onPrev={() => prevImage(property.id)}
                 onOpenGallery={() => setActiveGallery(property.id)}
+                index={0}
               />
             </Suspense>
             <PropertyDetails 
