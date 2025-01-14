@@ -11,9 +11,25 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  getDoc
+  getDoc,
+  DocumentData
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+export interface FirebaseDoc extends DocumentData {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  bathrooms: number;
+  bedrooms: number;
+  pricePerNight?: number;
+  pricePerMonth?: number;
+  pricingType: 'night' | 'month';
+  photos: string[];
+  createdAt: string;
+  isListed: boolean;
+}
 
 // Auth functions
 export const logoutUser = () => signOut(auth);
@@ -33,24 +49,24 @@ export const signInWithGoogle = async () => {
 export const addDocument = (collectionName: string, data: any) =>
   addDoc(collection(db, collectionName), data);
 
-export const getDocument = async (collectionName: string, id: string) => {
+export const getDocument = async (collectionName: string, id: string): Promise<FirebaseDoc | null> => {
   const docRef = doc(db, collectionName, id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return {
       id: docSnap.id,
       ...docSnap.data()
-    };
+    } as FirebaseDoc;
   }
   return null;
 };
 
-export const getDocuments = async (collectionName: string) => {
+export const getDocuments = async (collectionName: string): Promise<FirebaseDoc[]> => {
   const querySnapshot = await getDocs(collection(db, collectionName));
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
-  }));
+  })) as FirebaseDoc[];
 };
 
 export const updateDocument = (collectionName: string, id: string, data: any) =>

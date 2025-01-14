@@ -4,38 +4,10 @@ import { useState, useEffect } from 'react'
 import { Heart, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { getDocuments } from '@/lib/firebase/firebaseUtils'
+import { getDocuments, FirebaseDoc } from '@/lib/firebase/firebaseUtils'
 import Image from 'next/image'
 
-interface FirebaseDoc {
-  id: string;
-  title: string;
-  description: string;
-  location: string;
-  bathrooms: number;
-  bedrooms: number;
-  pricePerNight?: number;
-  pricePerMonth?: number;
-  pricingType: 'night' | 'month';
-  photos: string[];
-  createdAt: string;
-  isListed: boolean;
-}
-
-interface Property {
-  id: string;
-  title: string;
-  description: string;
-  location: string;
-  bathrooms: number;
-  bedrooms: number;
-  pricePerNight?: number;
-  pricePerMonth?: number;
-  pricingType: 'night' | 'month';
-  photos: string[];
-  createdAt: string;
-  isListed: boolean;
-}
+interface Property extends FirebaseDoc {}
 
 export default function Home() {
   const [properties, setProperties] = useState<Property[]>([])

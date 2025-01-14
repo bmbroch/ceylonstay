@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { addDocument, uploadFile, getDocument, updateDocument, getDocuments } from "@/lib/firebase/firebaseUtils";
+import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc } from "@/lib/firebase/firebaseUtils";
 import { auth } from "@/lib/firebase/firebase";
 import { signInAnonymously } from "firebase/auth";
 import { Pencil, Plus } from "lucide-react";
@@ -10,19 +10,7 @@ import Image from "next/image";
 
 const PASSCODE = "13579";
 
-interface Listing {
-  id: string;
-  title: string;
-  description: string;
-  location: string;
-  pricePerNight?: number;
-  pricePerMonth?: number;
-  pricingType: 'night' | 'month';
-  bedrooms: number;
-  bathrooms: number;
-  createdAt: string;
-  isListed: boolean;
-}
+interface Listing extends FirebaseDoc {}
 
 export default function UploadPage() {
   const router = useRouter();

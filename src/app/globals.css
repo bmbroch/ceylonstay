@@ -13,6 +13,12 @@
   scrollbar-width: none;  /* Firefox */
 }
 
+@layer base {
+  body {
+    @apply bg-[#d3d8d4];
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
