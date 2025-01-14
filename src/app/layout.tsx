@@ -24,12 +24,14 @@ export const metadata: Metadata = {
     description: "Trusted Sri Lankan rentals for 👩‍💻 digital nomads & ✈️ travelers",
     url: 'https://ceylonstay.com',
     siteName: 'CeylonStay',
-    images: {
-      url: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
-      width: 500,
-      height: 200,
-      alt: "CeylonStay - Trusted Sri Lankan rentals"
-    },
+    images: [
+      {
+        url: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
+        width: 500,
+        height: 200,
+        alt: "CeylonStay - Trusted Sri Lankan rentals"
+      }
+    ],
     type: "website",
     locale: 'en_US',
   },
@@ -39,7 +41,12 @@ export const metadata: Metadata = {
     description: "Trusted Sri Lankan rentals for 👩‍💻 digital nomads & ✈️ travelers",
     site: "@ceylonstay",
     creator: "@ceylonstay",
-    images: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
+    images: [{
+      url: '/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png',
+      width: 500,
+      height: 200,
+      alt: "CeylonStay - Trusted Sri Lankan rentals"
+    }],
   },
   viewport: {
     width: 'device-width',
