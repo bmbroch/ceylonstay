@@ -3,7 +3,8 @@
 import React from 'react';
 import Image from 'next/image';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Pagination, Navigation } from 'swiper/modules';
+import { Navigation, Pagination } from 'swiper/modules';
+import type { Swiper as SwiperType } from 'swiper';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -27,10 +28,7 @@ export default function ImageCarousel({ images, alt = "Property image" }: ImageC
           bulletActiveClass: 'swiper-pagination-bullet-active !bg-white',
           bulletClass: 'swiper-pagination-bullet !bg-white/50',
         }}
-        navigation={{
-          nextEl: '.swiper-button-next',
-          prevEl: '.swiper-button-prev',
-        }}
+        navigation
         className="w-full [&_.swiper-button-next]:!text-white [&_.swiper-button-prev]:!text-white [&_.swiper-button-next]:!hidden [&_.swiper-button-prev]:!hidden md:[&_.swiper-button-next]:!block md:[&_.swiper-button-prev]:!block"
       >
         {images.map((image, index) => (
