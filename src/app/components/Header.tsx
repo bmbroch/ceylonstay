@@ -9,12 +9,16 @@ const Header = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           <div className="flex-shrink-0">
-            {/* Logo with rounded corners */}
             <Link href="/" className="flex items-center">
-              <div className="w-48 h-12 relative flex items-center">
-                <div className="text-2xl font-bold text-gray-800">
-                  Ceylon<span className="text-[#6474FC]">Stay</span>
-                </div>
+              <div className="relative w-48 h-16">
+                <Image
+                  src="/logo_final.png"
+                  alt="CeylonStay Logo"
+                  fill
+                  priority
+                  sizes="(max-width: 768px) 100vw, 192px"
+                  className="object-contain"
+                />
               </div>
             </Link>
           </div>

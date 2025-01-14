@@ -86,8 +86,8 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#fefefe] p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <main className="min-h-screen bg-[#fefefe] p-2 md:p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
         {properties.map((property) => (
           <Card key={property.id} className="group relative overflow-hidden rounded-xl border-0 shadow-sm">
             <div className="relative aspect-square overflow-hidden">
