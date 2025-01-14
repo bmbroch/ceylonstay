@@ -10,16 +10,14 @@ const Header = () => {
         <div className="flex justify-between items-center py-4">
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center">
-              <div className="relative w-48 h-16">
-                <Image
-                  src="/logo_final.png"
-                  alt="CeylonStay Logo"
-                  fill
-                  priority
-                  sizes="(max-width: 768px) 100vw, 192px"
-                  className="object-contain"
-                />
-              </div>
+              <Image
+                src="/ceylon_stay_logo_red.png"
+                alt="CeylonStay Logo"
+                width={200}
+                height={50}
+                className="h-12 w-auto"
+                priority
+              />
             </Link>
           </div>
           
