@@ -2,14 +2,16 @@
 
 import React from 'react';
 import Image from 'next/image';
+// Import Swiper React components
 import { Swiper, SwiperSlide } from 'swiper/react';
+
+// Import required modules
 import { Navigation, Pagination } from 'swiper/modules';
-import type { Swiper as SwiperType } from 'swiper';
 
 // Import Swiper styles
-import 'swiper/css';
-import 'swiper/css/pagination';
+import 'swiper/swiper.min.css';
 import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 
 interface ImageCarouselProps {
   images: string[];
@@ -20,7 +22,7 @@ export default function ImageCarousel({ images, alt = "Property image" }: ImageC
   return (
     <div className="relative w-full">
       <Swiper
-        modules={[Pagination, Navigation]}
+        modules={[Navigation, Pagination]}
         spaceBetween={0}
         slidesPerView={1}
         pagination={{
