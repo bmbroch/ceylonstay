@@ -29,6 +29,7 @@ export interface FirebaseDoc extends DocumentData {
   photos: string[];
   createdAt: string;
   isListed: boolean;
+  availableDate: string | 'now'; // 'now' or ISO date string
 }
 
 // Auth functions
@@ -61,13 +62,30 @@ export const getDocument = async (collectionName: string, id: string): Promise<F
   return null;
 };
 
-export const getDocuments = async (collectionName: string): Promise<FirebaseDoc[]> => {
-  const querySnapshot = await getDocs(collection(db, collectionName));
-  return querySnapshot.docs.map(doc => ({
+let cachedDocuments: { [key: string]: { data: any[], timestamp: number } } = {}
+const CACHE_DURATION = 30000 // 30 seconds cache
+
+export const getDocuments = async (collectionName: string) => {
+  // Check cache first
+  const cached = cachedDocuments[collectionName]
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data
+  }
+
+  const querySnapshot = await getDocs(collection(db, collectionName))
+  const documents = querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
-  })) as FirebaseDoc[];
-};
+  }))
+
+  // Update cache
+  cachedDocuments[collectionName] = {
+    data: documents,
+    timestamp: Date.now()
+  }
+
+  return documents
+}
 
 export const updateDocument = (collectionName: string, id: string, data: any) =>
   updateDoc(doc(db, collectionName, id), data);
