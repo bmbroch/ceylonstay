@@ -26,6 +26,15 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/CeylonStay (500 x 200 px) (500 x 120 px) (300 x 120 px).png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "cleanUrls": true,
