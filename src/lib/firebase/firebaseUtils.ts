@@ -136,8 +136,7 @@ export const uploadFile = async (file: File, path: string) => {
     const snapshot = await uploadBytes(storageRef, file, metadata);
     console.log('Upload successful:', {
       ref: snapshot.ref.fullPath,
-      bytesTransferred: snapshot.bytesTransferred,
-      totalBytes: snapshot.totalBytes
+      metadata: snapshot.metadata
     });
     
     // Get the download URL
