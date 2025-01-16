@@ -170,7 +170,7 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       sortOrder: 0,
       uploadedAt: new Date().toISOString()
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in uploadFile:', error);
     
     // Retry logic for transient errors
@@ -180,7 +180,7 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       return uploadFile(file, path, retryCount + 1);
     }
     
-    throw new Error(`Upload failed after ${retryCount} retries: ${error.message}`);
+    throw new Error(`Upload failed after ${retryCount} retries: ${error?.message || 'Unknown error'}`);
   }
 };
 
