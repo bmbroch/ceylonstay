@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 // Ensure storage bucket is set
 const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
@@ -13,16 +13,10 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: storageBucket, // Use the validated bucket
+  storageBucket: storageBucket,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
-
-console.log('Initializing Firebase with config:', {
-  ...firebaseConfig,
-  apiKey: '***', // Hide sensitive data
-  appId: '***'
-});
 
 // Initialize Firebase
 let app;
@@ -33,6 +27,14 @@ if (!getApps().length) {
 }
 
 const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+// Set CORS configuration for storage
+if (process.env.NODE_ENV === 'development') {
+  // Optional: Use storage emulator in development
+  // connectStorageEmulator(storage, 'localhost', 9199);
+}
 
 // Set persistence to LOCAL to maintain the session
 setPersistence(auth, browserLocalPersistence)
@@ -40,9 +42,13 @@ setPersistence(auth, browserLocalPersistence)
     console.error("Error setting auth persistence:", error);
   });
 
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-console.log('Firebase Storage initialized with bucket:', storageBucket);
+// Log initialization details for debugging
+console.log('Firebase initialized:', {
+  auth: !!auth,
+  db: !!db,
+  storage: !!storage,
+  storageBucket,
+  origin: typeof window !== 'undefined' ? window.location.origin : 'server-side'
+});
 
 export { app, auth, db, storage };

@@ -3,6 +3,7 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously
 } from "firebase/auth";
 import {
   collection,
@@ -94,65 +95,77 @@ export const deleteDocument = (collectionName: string, id: string) =>
   deleteDoc(doc(db, collectionName, id));
 
 // Storage functions
-export const uploadFile = async (file: File, path: string) => {
+export const uploadFile = async (file: File, path: string, retryCount = 0) => {
   try {
-    // Log Firebase app state
-    console.log('Firebase Storage state:', {
-      app: !!storage.app,
-      bucket: storage.app?.options?.storageBucket,
-      path: path
-    });
-
-    // Create storage reference with standard path
-    const storageRef = ref(storage, path);
-    console.log('Storage reference created:', storageRef.fullPath);
-    
-    // Add metadata to the upload
-    const metadata = {
-      contentType: file.type || 'application/octet-stream',
-      customMetadata: {
-        originalName: file.name,
-        size: file.size.toString(),
-        uploadedAt: new Date().toISOString(),
-      },
-    };
-
     // Check if user is authenticated
     if (!auth.currentUser) {
-      throw new Error('User must be authenticated to upload files');
+      // Try anonymous sign in
+      await signInAnonymously(auth);
+      console.log('Signed in anonymously');
     }
 
     console.log('Starting file upload:', {
       name: file.name,
       type: file.type,
       size: file.size,
-      path: path,
-      metadata: metadata,
-      authUser: auth.currentUser?.uid,
-      storageBucket: storage.app?.options?.storageBucket
+      path: path
     });
 
-    // Upload the file with metadata
-    const snapshot = await uploadBytes(storageRef, file, metadata);
-    console.log('Upload successful:', {
-      ref: snapshot.ref.fullPath,
-      metadata: snapshot.metadata
+    // Create storage reference
+    const storageRef = ref(storage, path);
+    console.log('Storage reference created:', {
+      ref: storageRef.toString(),
+      fullPath: storageRef.fullPath,
+      bucket: storageRef.bucket,
+      name: storageRef.name
     });
     
-    // Get the download URL
-    const downloadURL = await getDownloadURL(snapshot.ref);
-    console.log('Download URL generated:', downloadURL);
-    
-    return downloadURL;
+    // Add metadata with CORS headers
+    const metadata = {
+      contentType: file.type || 'application/octet-stream',
+      customMetadata: {
+        originalName: file.name,
+        size: file.size.toString(),
+        uploadedAt: new Date().toISOString()
+      },
+      cacheControl: 'public,max-age=31536000'
+    };
+
+    // Upload using Firebase SDK with retry logic
+    try {
+      const snapshot = await uploadBytes(storageRef, file, metadata);
+      console.log('Upload successful:', {
+        ref: snapshot.ref.toString(),
+        fullPath: snapshot.ref.fullPath,
+        bucket: snapshot.ref.bucket,
+        name: snapshot.ref.name,
+        metadata: snapshot.metadata
+      });
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log('Download URL generated:', downloadURL);
+      
+      return downloadURL;
+    } catch (uploadError: any) {
+      // Retry logic for network errors
+      if (retryCount < 3 && 
+          (uploadError.code === 'storage/network-error' || 
+           uploadError.code === 'storage/retry-limit-exceeded')) {
+        console.log(`Retrying upload (attempt ${retryCount + 1})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return uploadFile(file, path, retryCount + 1);
+      }
+      throw uploadError;
+    }
   } catch (error: any) {
     console.error("Error uploading file:", {
       code: error.code,
+      name: error.name,
       message: error.message,
-      storageBucket: storage.app?.options?.storageBucket,
-      path: path
+      stack: error.stack
     });
     
-    // Add more specific error handling
     if (error.code === 'storage/unauthorized') {
       throw new Error('Permission denied. Please check if you are logged in and have proper permissions.');
     } else if (error.code === 'storage/canceled') {

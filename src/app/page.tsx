@@ -153,7 +153,7 @@ function PropertyDetails({ property, onShowDescription }: {
           <h3 className="font-semibold text-black">{property.title}</h3>
           <p className="text-sm text-gray-500">{property.location}</p>
         </div>
-        <span className={`px-2 py-1 rounded text-xs font-medium ${
+        <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
           availability.isNow
             ? 'bg-emerald-100 text-emerald-800'
             : 'bg-blue-100 text-blue-800'

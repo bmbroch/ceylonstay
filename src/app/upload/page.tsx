@@ -23,6 +23,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [listings, setListings] = useState<Listing[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
@@ -42,6 +43,28 @@ export default function UploadPage() {
   const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
   const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  // Add authentication effect - only run after password is verified
+  useEffect(() => {
+    const authenticate = async () => {
+      if (!isPasswordVerified) return;
+      
+      try {
+        await signInAnonymously(auth);
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Authentication error:', error);
+        setError('Failed to authenticate. Please try again.');
+      }
+    };
+
+    if (!isAuthenticated && isPasswordVerified) {
+      authenticate();
+    }
+  }, [isAuthenticated, isPasswordVerified]);
 
   // Load listings after authentication
   useEffect(() => {
@@ -62,7 +85,8 @@ export default function UploadPage() {
               bathrooms: doc.bathrooms || 0,
               createdAt: doc.createdAt || '',
               isListed: doc.isListed ?? true,
-              availableDate: doc.availableDate || new Date().toISOString()
+              availableDate: doc.availableDate || new Date().toISOString(),
+              photos: doc.photos || []
             } as Listing))
             .sort((a, b) => {
               const dateA = new Date(a.availableDate);
@@ -142,7 +166,7 @@ export default function UploadPage() {
   const handlePasscodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (passcode === PASSCODE) {
-      setIsAuthenticated(true);
+      setIsPasswordVerified(true);
     } else {
       alert("Incorrect passcode. Please try again.");
     }
@@ -167,82 +191,87 @@ export default function UploadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setUploadError("");
-    
+    setIsUploading(true);
+    setError(null);
+
     try {
+      // Validate that we have either existing photos or new photos
       if (selectedFiles.length === 0 && existingPhotos.length === 0) {
-        setUploadError("Please select at least one image to upload.");
-        setIsLoading(false);
-        return;
+        throw new Error('Please select at least one photo');
       }
 
-      // Sign in anonymously before uploading
-      await signInAnonymously(auth);
-
-      // Upload new images if any
-      let photoUrls = [...existingPhotos];
+      // Upload new photos if any
+      let newPhotoUrls: string[] = [];
       if (selectedFiles.length > 0) {
         const uploadPromises = selectedFiles.map(async (file) => {
-          try {
-            const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-            const timestamp = Date.now();
-            const randomString = Math.random().toString(36).substring(7);
-            const fileName = `${timestamp}-${randomString}.${fileExtension}`;
-            const url = await uploadFile(file, `listings/${fileName}`);
-            return url;
-          } catch (error: any) {
-            throw new Error(`Error uploading ${file.name}: ${error.message}`);
-          }
+          const timestamp = Date.now();
+          const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+          const path = `listings/${timestamp}-${safeFileName}`;
+          
+          console.log('Starting upload for file:', {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            path: path
+          });
+
+          return uploadFile(file, path);
         });
 
-        const newPhotoUrls = await Promise.all(uploadPromises);
-        photoUrls = [...photoUrls, ...newPhotoUrls];
+        newPhotoUrls = await Promise.all(uploadPromises);
+        console.log('All files uploaded successfully:', newPhotoUrls);
       }
+
+      // Combine existing photos and new photos
+      const allPhotos = [...existingPhotos, ...newPhotoUrls];
 
       // Prepare listing data
       const listingData = {
         ...formData,
-        bathrooms: Number(formData.bathrooms),
-        bedrooms: Number(formData.bedrooms),
-        pricePerNight: formData.pricingType === 'night' ? Number(formData.pricePerNight) : 0,
-        pricePerMonth: formData.pricingType === 'month' ? Number(formData.pricePerMonth) : 0,
-        pricingType: formData.pricingType,
-        photos: photoUrls,
+        photos: allPhotos,
+        createdAt: new Date().toISOString(),
         isListed: true,
-        availableDate: formData.availableDate,
-        ...(editId === 'new' ? { createdAt: new Date().toISOString() } : {})
+        updatedAt: new Date().toISOString()
       };
 
-      // Add new document or update existing one
+      // Save to Firestore
       if (editId && editId !== 'new') {
-        await updateDocument("ceylonstays", editId, listingData);
+        await updateDocument('ceylonstays', editId, listingData);
       } else {
-        await addDocument("ceylonstays", listingData);
+        await addDocument('ceylonstays', listingData);
       }
 
-      // Reset form and refresh listings
-      resetForm();
+      // Reset form and state
+      setSelectedFiles([]);
+      setUploadedFiles([]);
+      setExistingPhotos([]);
       setEditId(null);
+      
+      // Refresh listings
       const updatedListings = await getDocuments('ceylonstays');
-      setListings(updatedListings.map(doc => ({
-        id: doc.id,
-        title: doc.title || '',
-        description: doc.description || '',
-        location: doc.location || '',
-        pricePerNight: doc.pricePerNight || 0,
-        pricePerMonth: doc.pricePerMonth || 0,
-        pricingType: doc.pricingType || 'night',
-        bedrooms: doc.bedrooms || 0,
-        bathrooms: doc.bathrooms || 0,
-        createdAt: doc.createdAt || '',
-        isListed: doc.isListed ?? true
-      } as Listing)));
+      const sortedListings = updatedListings
+        .map(doc => ({
+          id: doc.id,
+          title: doc.title || '',
+          description: doc.description || '',
+          location: doc.location || '',
+          pricePerNight: doc.pricePerNight || 0,
+          pricePerMonth: doc.pricePerMonth || 0,
+          pricingType: doc.pricingType || 'night',
+          bedrooms: doc.bedrooms || 0,
+          bathrooms: doc.bathrooms || 0,
+          createdAt: doc.createdAt || '',
+          isListed: doc.isListed ?? true,
+          availableDate: doc.availableDate || new Date().toISOString(),
+          photos: doc.photos || []
+        } as Listing));
+      setListings(sortedListings);
+
     } catch (error: any) {
-      console.error("Error submitting listing:", error);
-      setUploadError(error.message || "Error uploading listing. Please try again.");
+      console.error('Submission error:', error);
+      setError(error.message || 'Failed to save listing');
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
@@ -255,8 +284,28 @@ export default function UploadPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setSelectedFiles(prev => [...prev, ...files]);
+    if (!e.target.files?.length) return;
+    
+    const files = Array.from(e.target.files).filter(file => {
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Please select only image files.');
+        return false;
+      }
+      
+      // Check file size (e.g., 5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError('Files must be less than 5MB.');
+        return false;
+      }
+      
+      return true;
+    });
+    
+    if (files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      setUploadError(''); // Clear any previous errors if successful
+    }
   };
 
   const removeFile = (index: number) => {
@@ -285,7 +334,8 @@ export default function UploadPage() {
           bathrooms: doc.bathrooms || 0,
           createdAt: doc.createdAt || '',
           isListed: doc.isListed ?? true,
-          availableDate: doc.availableDate || new Date().toISOString()
+          availableDate: doc.availableDate || new Date().toISOString(),
+          photos: doc.photos || []
         } as Listing))
         .sort((a, b) => {
           const dateA = new Date(a.availableDate);
@@ -388,7 +438,8 @@ export default function UploadPage() {
     }
   };
 
-  if (!isAuthenticated) {
+  // Show password screen first
+  if (!isPasswordVerified) {
     return (
       <div className="min-h-screen bg-white flex items-start justify-center pt-32 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow">
@@ -423,6 +474,17 @@ export default function UploadPage() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state while authenticating with Firebase
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-gray-600">Authenticating...</div>
         </div>
       </div>
     );
@@ -759,6 +821,7 @@ export default function UploadPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
@@ -771,6 +834,22 @@ export default function UploadPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {listings.map((listing) => (
                   <tr key={listing.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {listing.photos && listing.photos.length > 0 ? (
+                        <div className="relative h-16 w-20">
+                          <Image
+                            src={listing.photos[0]}
+                            alt={listing.title}
+                            fill
+                            className="object-cover rounded-md"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-16 w-20 bg-gray-100 rounded-md flex items-center justify-center">
+                          <div className="text-gray-400 text-xs">No photo</div>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{listing.title}</div>
                     </td>
