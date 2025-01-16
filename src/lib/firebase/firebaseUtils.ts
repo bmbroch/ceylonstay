@@ -135,25 +135,20 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       throw new Error('Still not authenticated after sign-in attempt');
     }
 
-    // Use the same collection name for storage path
-    const collectionName = getCollectionName();
-    const storagePath = path.replace('listings/', `${collectionName}/`);
-    console.log('Using storage path:', storagePath);
+    console.log('Using storage path:', path);
+    const storageRef = ref(storage, path);
     
-    const storageRef = ref(storage, storagePath);
-    
-    // Add metadata with CORS headers
+    // Add metadata
     const metadata = {
       contentType: file.type || 'application/octet-stream',
       customMetadata: {
         originalName: file.name,
         size: file.size.toString(),
-        uploadedAt: new Date().toISOString(),
-        environment: process.env.NODE_ENV
+        uploadedAt: new Date().toISOString()
       }
     };
 
-    console.log('Starting upload to path:', storagePath);
+    console.log('Starting upload to path:', path);
     
     // Upload using Firebase SDK with retry logic
     const snapshot = await uploadBytes(storageRef, file, metadata);
@@ -164,9 +159,9 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
 
     // Return photo data
     return {
-      id: storagePath.split('/').pop() || '',
+      id: path.split('/').pop() || '',
       url: downloadUrl,
-      fileName: storagePath,
+      fileName: path,
       sortOrder: 0,
       uploadedAt: new Date().toISOString()
     };

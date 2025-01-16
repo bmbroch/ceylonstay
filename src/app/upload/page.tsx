@@ -264,7 +264,8 @@ export default function UploadPage() {
 
     try {
       const uploadPromises = selectedFiles.map(file => {
-        const path = `listings/${Date.now()}-${file.name}`;
+        const collectionName = process.env.NODE_ENV === 'production' ? 'ceylonstaysproduction' : 'ceylonstays';
+        const path = `${collectionName}/${Date.now()}-${file.name}`;
         return uploadFile(file, path);
       });
 
