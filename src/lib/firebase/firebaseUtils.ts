@@ -121,13 +121,26 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
   try {
     // Check if user is authenticated
     if (!auth.currentUser) {
-      // Try anonymous sign in
-      await signInAnonymously(auth);
-      console.log('Signed in anonymously');
+      try {
+        // Try anonymous sign in
+        await signInAnonymously(auth);
+        console.log('Signed in anonymously for upload');
+      } catch (authError) {
+        console.error('Failed to sign in anonymously:', authError);
+        throw new Error('Authentication failed. Please try again.');
+      }
     }
 
-    // Create storage reference
-    const storageRef = ref(storage, path);
+    if (!auth.currentUser) {
+      throw new Error('Still not authenticated after sign-in attempt');
+    }
+
+    // Use the same collection name for storage path
+    const collectionName = getCollectionName();
+    const storagePath = path.replace('listings/', `${collectionName}/`);
+    console.log('Using storage path:', storagePath);
+    
+    const storageRef = ref(storage, storagePath);
     
     // Add metadata with CORS headers
     const metadata = {
@@ -135,38 +148,39 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       customMetadata: {
         originalName: file.name,
         size: file.size.toString(),
-        uploadedAt: new Date().toISOString()
-      },
-      cacheControl: 'public, max-age=31536000'
+        uploadedAt: new Date().toISOString(),
+        environment: process.env.NODE_ENV
+      }
     };
 
+    console.log('Starting upload to path:', storagePath);
+    
     // Upload using Firebase SDK with retry logic
     const snapshot = await uploadBytes(storageRef, file, metadata);
+    console.log('Upload completed, getting download URL');
+    
     const downloadUrl = await getDownloadURL(snapshot.ref);
-
-    // Ensure the URL has the alt=media parameter
-    const finalUrl = downloadUrl.includes('alt=media') 
-      ? downloadUrl 
-      : `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}alt=media`;
+    console.log('Got download URL:', downloadUrl);
 
     // Return photo data
     return {
-      id: path.split('/').pop() || '',
-      url: finalUrl,
-      fileName: path,
+      id: storagePath.split('/').pop() || '',
+      url: downloadUrl,
+      fileName: storagePath,
       sortOrder: 0,
       uploadedAt: new Date().toISOString()
     };
   } catch (error) {
-    console.error('Error uploading file:', error);
+    console.error('Error in uploadFile:', error);
     
     // Retry logic for transient errors
     if (retryCount < 3) {
       console.log(`Retrying upload (attempt ${retryCount + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
       return uploadFile(file, path, retryCount + 1);
     }
     
-    throw error;
+    throw new Error(`Upload failed after ${retryCount} retries: ${error.message}`);
   }
 };
 
