@@ -1,26 +1,8 @@
 [
   {
-    "origin": [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002",
-      "http://localhost:3003",
-      "http://localhost:3004",
-      "http://localhost:3005",
-      "http://localhost:3006",
-      "http://localhost:3007",
-      "http://localhost:3008",
-      "http://localhost:3009",
-      "http://localhost:3010",
-      "http://localhost:3011",
-      "http://localhost:3012",
-      "http://localhost:3013",
-      "http://localhost:3014",
-      "http://localhost:3015",
-      "https://ceylonstay.com"
-    ],
-    "method": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-    "maxAgeSeconds": 3600,
-    "responseHeader": ["Content-Type", "Authorization"]
+    "origin": ["*"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
   }
 ] 

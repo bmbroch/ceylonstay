@@ -41,6 +41,19 @@ export interface FirebaseDoc extends DocumentData {
   availableDate: string | 'now'; // 'now' or ISO date string
 }
 
+// Add collection name constants
+const COLLECTION_NAMES = {
+  development: 'ceylonstays',
+  production: 'ceylonstaysproduction'
+};
+
+// Helper to get the correct collection name based on environment
+export const getCollectionName = () => {
+  return process.env.NODE_ENV === 'production' 
+    ? COLLECTION_NAMES.production 
+    : COLLECTION_NAMES.development;
+};
+
 // Auth functions
 export const logoutUser = () => signOut(auth);
 
@@ -56,11 +69,11 @@ export const signInWithGoogle = async () => {
 };
 
 // Firestore functions
-export const addDocument = (collectionName: string, data: any) =>
-  addDoc(collection(db, collectionName), data);
+export const addDocument = (data: any) =>
+  addDoc(collection(db, getCollectionName()), data);
 
-export const getDocument = async (collectionName: string, id: string): Promise<FirebaseDoc | null> => {
-  const docRef = doc(db, collectionName, id);
+export const getDocument = async (id: string): Promise<FirebaseDoc | null> => {
+  const docRef = doc(db, getCollectionName(), id);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return {
@@ -74,8 +87,9 @@ export const getDocument = async (collectionName: string, id: string): Promise<F
 let cachedDocuments: { [key: string]: { data: any[], timestamp: number } } = {}
 const CACHE_DURATION = 30000 // 30 seconds cache
 
-export const getDocuments = async (collectionName: string) => {
+export const getDocuments = async () => {
   // Check cache first
+  const collectionName = getCollectionName();
   const cached = cachedDocuments[collectionName]
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     return cached.data
@@ -96,11 +110,11 @@ export const getDocuments = async (collectionName: string) => {
   return documents
 }
 
-export const updateDocument = (collectionName: string, id: string, data: any) =>
-  updateDoc(doc(db, collectionName, id), data);
+export const updateDocument = (id: string, data: any) =>
+  updateDoc(doc(db, getCollectionName(), id), data);
 
-export const deleteDocument = (collectionName: string, id: string) =>
-  deleteDoc(doc(db, collectionName, id));
+export const deleteDocument = (id: string) =>
+  deleteDoc(doc(db, getCollectionName(), id));
 
 // Storage functions
 export const uploadFile = async (file: File, path: string, retryCount = 0): Promise<PhotoData> => {
@@ -123,18 +137,23 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
         size: file.size.toString(),
         uploadedAt: new Date().toISOString()
       },
-      cacheControl: 'public,max-age=31536000'
+      cacheControl: 'public, max-age=31536000'
     };
 
     // Upload using Firebase SDK with retry logic
     const snapshot = await uploadBytes(storageRef, file, metadata);
     const downloadUrl = await getDownloadURL(snapshot.ref);
 
-    // Return photo data with alt=media parameter
+    // Ensure the URL has the alt=media parameter
+    const finalUrl = downloadUrl.includes('alt=media') 
+      ? downloadUrl 
+      : `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}alt=media`;
+
+    // Return photo data
     return {
       id: path.split('/').pop() || '',
-      url: `${downloadUrl}?alt=media`,
-      fileName: file.name,
+      url: finalUrl,
+      fileName: path,
       sortOrder: 0,
       uploadedAt: new Date().toISOString()
     };
@@ -153,27 +172,31 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
 
 // Add new utility functions for photo management
 export const updatePhotoOrder = async (
-  collectionName: string,
   docId: string,
   photos: PhotoData[]
 ): Promise<void> => {
-  // Update photos array with new order
-  await updateDocument(collectionName, docId, {
-    photos: photos.map((photo, index) => ({
-      ...photo,
-      sortOrder: index
-    }))
+  // Ensure each photo is a proper object before updating
+  const validatedPhotos = photos.map((photo, index) => ({
+    id: photo.id || `photo-${index}`,
+    url: photo.url || '',
+    fileName: photo.fileName || `photo-${index}.jpg`,
+    uploadedAt: photo.uploadedAt || new Date().toISOString(),
+    sortOrder: index
+  }));
+
+  // Update photos array with validated data
+  await updateDocument(docId, {
+    photos: validatedPhotos
   });
 };
 
 export const deletePhoto = async (
-  collectionName: string,
   docId: string,
   photoId: string
 ): Promise<void> => {
   try {
     // Get the current document
-    const doc = await getDocument(collectionName, docId);
+    const doc = await getDocument(docId);
     if (!doc) throw new Error('Document not found');
 
     // Find the photo to delete
@@ -197,7 +220,7 @@ export const deletePhoto = async (
         sortOrder: index
       }));
 
-    await updateDocument(collectionName, docId, { photos: updatedPhotos });
+    await updateDocument(docId, { photos: updatedPhotos });
   } catch (error) {
     console.error('Error deleting photo:', error);
     throw error;

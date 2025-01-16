@@ -8,6 +8,7 @@ import { getDocuments, FirebaseDoc, updateDocument } from '@/lib/firebase/fireba
 import Image from 'next/image'
 import { imageLoader } from '@/lib/imageLoader'
 import { PropertySkeletonGrid } from '@/components/ui/property-skeleton'
+import { useRouter } from 'next/navigation'
 
 interface Property extends FirebaseDoc {}
 
@@ -304,69 +305,65 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeDescription, setActiveDescription] = useState<string | null>(null)
   const [activeGallery, setActiveGallery] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const fetchProperties = async () => {
       try {
-        const listings = await getDocuments('ceylonstays') as FirebaseDoc[]
+        setIsLoading(true);
+        const listings = await getDocuments() as FirebaseDoc[];
         console.log('Raw listings from Firebase:', listings);
+        
+        if (!listings || listings.length === 0) {
+          console.log('No listings found');
+          setProperties([]);
+          setIsLoading(false);
+          return;
+        }
+
         const now = new Date()
         now.setHours(0, 0, 0, 0)
 
-        // Process data in chunks to avoid blocking the main thread
-        const processListings = () => {
-          const processed = listings
-            .filter(doc => doc.isListed ?? true)
-            .map(doc => {
-              console.log('Processing listing:', doc.id, 'Photos:', doc.photos);
-              return {
-                id: doc.id,
-                title: doc.title || '',
-                description: doc.description || '',
-                location: doc.location || '',
-                bathrooms: doc.bathrooms || 0,
-                bedrooms: doc.bedrooms || 0,
-                pricePerNight: doc.pricePerNight || 0,
-                pricePerMonth: doc.pricePerMonth || 0,
-                pricingType: doc.pricingType || 'night',
-                photos: doc.photos || [],
-                createdAt: doc.createdAt || '',
-                isListed: doc.isListed ?? true,
-                availableDate: doc.availableDate || 'now'
-              }
-            })
-            .sort((a, b) => {
-              // Parse dates, defaulting to now if invalid
-              const dateA = new Date(a.availableDate)
-              const dateB = new Date(b.availableDate)
-              const validDateA = isNaN(dateA.getTime()) ? now : dateA
-              const validDateB = isNaN(dateB.getTime()) ? now : dateB
+        const processed = listings
+          .filter(doc => doc.isListed ?? true)
+          .map(doc => ({
+            id: doc.id,
+            title: doc.title || '',
+            description: doc.description || '',
+            location: doc.location || '',
+            bathrooms: doc.bathrooms || 0,
+            bedrooms: doc.bedrooms || 0,
+            pricePerNight: doc.pricePerNight || 0,
+            pricePerMonth: doc.pricePerMonth || 0,
+            pricingType: doc.pricingType || 'night',
+            photos: doc.photos || [],
+            createdAt: doc.createdAt || '',
+            isListed: doc.isListed ?? true,
+            availableDate: doc.availableDate || 'now'
+          }))
+          .sort((a, b) => {
+            const dateA = new Date(a.availableDate)
+            const dateB = new Date(b.availableDate)
+            const validDateA = isNaN(dateA.getTime()) ? now : dateA
+            const validDateB = isNaN(dateB.getTime()) ? now : dateB
 
-              validDateA.setHours(0, 0, 0, 0)
-              validDateB.setHours(0, 0, 0, 0)
+            validDateA.setHours(0, 0, 0, 0)
+            validDateB.setHours(0, 0, 0, 0)
 
-              const isAvailableNowA = validDateA <= now
-              const isAvailableNowB = validDateB <= now
+            const isAvailableNowA = validDateA <= now
+            const isAvailableNowB = validDateB <= now
 
-              if (isAvailableNowA && !isAvailableNowB) return -1
-              if (!isAvailableNowA && isAvailableNowB) return 1
+            if (isAvailableNowA && !isAvailableNowB) return -1
+            if (!isAvailableNowA && isAvailableNowB) return 1
 
-              return validDateA.getTime() - validDateB.getTime()
-            });
+            return validDateA.getTime() - validDateB.getTime()
+          });
 
-          console.log('Processed listings:', processed);
-          setProperties(processed);
-          setIsLoading(false);
-        };
-
-        // Use requestIdleCallback for non-critical processing
-        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(processListings);
-        } else {
-          setTimeout(processListings, 0);
-        }
+        console.log('Processed listings:', processed);
+        setProperties(processed);
       } catch (error) {
         console.error('Error fetching properties:', error)
+      } finally {
         setIsLoading(false)
       }
     }
@@ -405,68 +402,65 @@ export default function Home() {
     }));
   }, [properties]);
 
-  const handleToggleStatus = async (propertyId: string, currentStatus: boolean) => {
+  const handleListingToggle = async (propertyId: string, currentStatus: boolean) => {
     try {
-      await updateDocument('ceylonstays', propertyId, { isListed: !currentStatus });
-      setProperties(prev => prev.map(p => 
-        p.id === propertyId ? { ...p, isListed: !currentStatus } : p
-      ));
+      await updateDocument(propertyId, { isListed: !currentStatus });
+      router.refresh();
     } catch (error) {
       console.error('Error toggling listing status:', error);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-white p-6">
-        <PropertySkeletonGrid />
-      </div>
-    )
-  }
-
   return (
-    <main className="min-h-screen bg-white px-1 py-2 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8 max-w-7xl mx-auto">
-        {properties.map((property) => (
-          <Card key={property.id} className="group overflow-hidden">
-            <Suspense fallback={
-              <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center">
-                <div className="text-sm text-gray-500">Loading images...</div>
-              </div>
-            }>
-              <PropertyImages 
-                property={property}
-                activeIndex={activeImageIndexes[property.id] || 0}
-                onNext={() => nextImage(property.id)}
-                onPrev={() => prevImage(property.id)}
-                onOpenGallery={() => setActiveGallery(property.id)}
-                index={0}
-              />
-            </Suspense>
-            <PropertyDetails 
-              property={property}
-              onShowDescription={() => setActiveDescription(activeDescription === property.description ? null : property.description)}
-            />
-          </Card>
-        ))}
+    <main className="min-h-screen bg-gray-50/50">
+      <div className="container mx-auto px-4 py-8">
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <PropertySkeletonGrid count={6} />
+          </div>
+        ) : properties.length === 0 ? (
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-semibold text-gray-900">No listings available</h2>
+            <p className="mt-2 text-gray-600">Check back later for new properties.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {properties.map((property, index) => (
+              <Card key={property.id} className="group overflow-hidden">
+                <PropertyImages
+                  property={property}
+                  activeIndex={activeImageIndexes[property.id] || 0}
+                  onNext={() => nextImage(property.id)}
+                  onPrev={() => prevImage(property.id)}
+                  onOpenGallery={() => setActiveGallery(property.id)}
+                  index={index}
+                />
+                <PropertyDetails
+                  property={property}
+                  onShowDescription={() => setActiveDescription(property.description || null)}
+                />
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
-      
-      {/* Description Popup */}
+
+      {/* Description Modal */}
       {activeDescription && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setActiveDescription(null)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setActiveDescription(null)}>
           <div className="bg-white rounded-lg p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <p className="text-gray-700 whitespace-pre-wrap">{activeDescription}</p>
-            <button
-              onClick={() => setActiveDescription(null)}
-              className="mt-4 w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Close
-            </button>
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-semibold">Description</h3>
+              <button onClick={() => setActiveDescription(null)} className="text-gray-500 hover:text-gray-700">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="text-gray-600 whitespace-pre-wrap">{activeDescription}</p>
           </div>
         </div>
       )}
 
-      {/* Fullscreen Gallery */}
+      {/* Gallery Modal */}
       {activeGallery && (
         <FullscreenGallery
           property={properties.find(p => p.id === activeGallery)!}

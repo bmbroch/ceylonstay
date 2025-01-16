@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc, PhotoData, updatePhotoOrder, deletePhoto } from "@/lib/firebase/firebaseUtils";
+import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc, PhotoData, updatePhotoOrder, deletePhoto, getCollectionName } from "@/lib/firebase/firebaseUtils";
 import { auth } from "@/lib/firebase/firebase";
 import { signInAnonymously } from "firebase/auth";
 import { Pencil, Plus, CalendarIcon, GripVertical, X } from "lucide-react";
@@ -95,7 +95,12 @@ function PasswordForm({ onSubmit, passcode, setPasscode }: {
 
 // Create a client-only version of the password form
 const ClientOnlyPasswordForm = dynamic(() => Promise.resolve(PasswordForm), {
-  ssr: false
+  ssr: false,
+  loading: () => (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+    </div>
+  )
 });
 
 export default function UploadPage() {
@@ -104,9 +109,9 @@ export default function UploadPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isPasswordVerified, setIsPasswordVerified] = useState(false);
   const [passcode, setPasscode] = useState("");
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<FirebaseDoc[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [formData, setFormData] = useState<FormDataType>(INITIAL_FORM_DATA);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState("");
   const [existingPhotos, setExistingPhotos] = useState<PhotoData[]>([]);
@@ -115,6 +120,12 @@ export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  // Add refreshListings function inside the component
+  const refreshListings = async () => {
+    const fetchedListings = await getDocuments();
+    setListings(fetchedListings);
+  };
 
   // Initialize form data with current date after mount
   useEffect(() => {
@@ -150,7 +161,7 @@ export default function UploadPage() {
     const loadListings = async () => {
       if (isAuthenticated) {
         try {
-          const fetchedListings = await getDocuments('ceylonstays');
+          const fetchedListings = await getDocuments();
           const sortedListings = fetchedListings
             .map(doc => ({
               id: doc.id,
@@ -205,44 +216,27 @@ export default function UploadPage() {
   // Load listing data after authentication
   useEffect(() => {
     const loadListing = async () => {
-      if (editId && editId !== 'new' && isAuthenticated) {
-        try {
-          const listing = await getDocument('ceylonstays', editId);
-          if (listing) {
-            // Default to current date if no date or invalid date
-            let availableDate = '';
-            try {
-              availableDate = listing.availableDate === 'now' 
-                ? new Date().toISOString() 
-                : new Date(listing.availableDate).toISOString();
-            } catch (error) {
-              availableDate = new Date().toISOString();
-            }
-
-            setFormData({
-              title: listing.title || '',
-              description: listing.description || '',
-              location: listing.location || '',
-              bathrooms: listing.bathrooms || 1,
-              bedrooms: listing.bedrooms || 1,
-              pricePerNight: listing.pricePerNight || 0,
-              pricePerMonth: listing.pricePerMonth || 0,
-              pricingType: listing.pricingType || 'night',
-              availableDate
-            });
-            setExistingPhotos(listing.photos || []);
-          }
-        } catch (error) {
-          console.error('Error loading listing:', error);
-          setUploadError('Error loading listing data');
+      if (editId && editId !== 'new') {
+        const listing = await getDocument(editId);
+        if (listing) {
+          setFormData({
+            title: listing.title || '',
+            description: listing.description || '',
+            location: listing.location || '',
+            bathrooms: listing.bathrooms || 1,
+            bedrooms: listing.bedrooms || 1,
+            pricePerNight: listing.pricePerNight || 0,
+            pricePerMonth: listing.pricePerMonth || 0,
+            pricingType: listing.pricingType || 'night',
+            availableDate: listing.availableDate || new Date().toISOString()
+          });
+          setExistingPhotos(listing.photos || []);
         }
-      } else if (editId === 'new') {
-        resetForm();
       }
     };
 
     loadListing();
-  }, [editId, isAuthenticated]);
+  }, [editId]);
 
   const handlePasscodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,62 +263,38 @@ export default function UploadPage() {
     setUploadError('');
 
     try {
-      // Upload new photos
-      const uploadedPhotos = await Promise.all(
-        selectedFiles.map(async (file) => {
-          const path = `properties/${Date.now()}_${file.name}`;
-          return uploadFile(file, path);
-        })
-      );
+      const uploadPromises = selectedFiles.map(file => {
+        const path = `listings/${Date.now()}-${file.name}`;
+        return uploadFile(file, path);
+      });
 
-      // Combine existing and new photos, maintaining order
+      const uploadedPhotos = await Promise.all(uploadPromises);
       const allPhotos = [...existingPhotos, ...uploadedPhotos].map((photo, index) => ({
         ...photo,
         sortOrder: index
       }));
 
-      const data = {
+      const data: Partial<FirebaseDoc> = {
         ...formData,
         photos: allPhotos,
         updatedAt: new Date().toISOString()
       };
 
-      // Save to Firestore
-      if (editId && editId !== 'new') {
-        await updateDocument('ceylonstays', editId, data);
-      } else {
-        await addDocument('ceylonstays', data);
+      if (editId === 'new') {
+        await addDocument({
+          ...data,
+          createdAt: new Date().toISOString(),
+          isListed: true
+        });
+      } else if (editId) {
+        await updateDocument(editId, data);
       }
 
-      // Reset form and state
-      setSelectedFiles([]);
-      setUploadedFiles([]);
-      setExistingPhotos([]);
+      resetForm();
       setEditId(null);
-      
-      // Refresh listings
-      const updatedListings = await getDocuments('ceylonstays');
-      const sortedListings = updatedListings
-        .map(doc => ({
-          id: doc.id,
-          title: doc.title || '',
-          description: doc.description || '',
-          location: doc.location || '',
-          pricePerNight: doc.pricePerNight || 0,
-          pricePerMonth: doc.pricePerMonth || 0,
-          pricingType: doc.pricingType || 'night',
-          bedrooms: doc.bedrooms || 0,
-          bathrooms: doc.bathrooms || 0,
-          createdAt: doc.createdAt || '',
-          isListed: doc.isListed ?? true,
-          availableDate: doc.availableDate || new Date().toISOString(),
-          photos: doc.photos || []
-        } as Listing));
-      setListings(sortedListings);
-
+      refreshListings();
     } catch (error) {
-      console.error('Error:', error);
-      setUploadError('Failed to upload. Please try again.');
+      console.error('Error submitting form:', error);
     } finally {
       setIsLoading(false);
     }
@@ -339,27 +309,14 @@ export default function UploadPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length) return;
-    
-    const files = Array.from(e.target.files).filter(file => {
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
-        setUploadError('Please select only image files.');
-        return false;
-      }
-      
-      // Check file size (e.g., 5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        setUploadError('Files must be less than 5MB.');
-        return false;
-      }
-      
-      return true;
-    });
-    
+    const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setUploadError(''); // Clear any previous errors if successful
+      try {
+        const validFiles = files.filter(file => file.type.startsWith('image/'));
+        setSelectedFiles(prev => [...prev, ...validFiles]);
+      } catch (error) {
+        console.error('Error handling files:', error);
+      }
     }
   };
 
@@ -373,51 +330,11 @@ export default function UploadPage() {
 
   const handleListingToggle = async (listingId: string, currentStatus: boolean) => {
     try {
-      await updateDocument("ceylonstays", listingId, { isListed: !currentStatus });
-      // Refresh listings after toggle
-      const updatedListings = await getDocuments('ceylonstays');
-      const sortedListings = updatedListings
-        .map(doc => ({
-          id: doc.id,
-          title: doc.title || '',
-          description: doc.description || '',
-          location: doc.location || '',
-          pricePerNight: doc.pricePerNight || 0,
-          pricePerMonth: doc.pricePerMonth || 0,
-          pricingType: doc.pricingType || 'night',
-          bedrooms: doc.bedrooms || 0,
-          bathrooms: doc.bathrooms || 0,
-          createdAt: doc.createdAt || '',
-          isListed: doc.isListed ?? true,
-          availableDate: doc.availableDate || new Date().toISOString(),
-          photos: doc.photos || []
-        } as Listing))
-        .sort((a, b) => {
-          const dateA = new Date(a.availableDate);
-          const dateB = new Date(b.availableDate);
-          const now = new Date();
-          
-          // Set time to midnight for accurate date comparison
-          now.setHours(0, 0, 0, 0);
-          dateA.setHours(0, 0, 0, 0);
-          dateB.setHours(0, 0, 0, 0);
-          
-          // Handle invalid dates by treating them as "now"
-          const validDateA = isNaN(dateA.getTime()) ? now : dateA;
-          const validDateB = isNaN(dateB.getTime()) ? now : dateB;
-          
-          // Check if dates are today or in the past (available now)
-          const isAvailableNowA = validDateA <= now;
-          const isAvailableNowB = validDateB <= now;
-          
-          // If one is available now and the other isn't, prioritize available now
-          if (isAvailableNowA && !isAvailableNowB) return -1;
-          if (!isAvailableNowA && isAvailableNowB) return 1;
-          
-          // If both are available now or both are future dates, sort by date
-          return validDateA.getTime() - validDateB.getTime();
-        });
-      setListings(sortedListings);
+      await updateDocument(listingId, {
+        isListed: !currentStatus,
+        updatedAt: new Date().toISOString()
+      });
+      refreshListings();
     } catch (error) {
       console.error('Error toggling listing status:', error);
     }
@@ -501,15 +418,46 @@ export default function UploadPage() {
     const [removed] = reorderedPhotos.splice(result.source.index, 1);
     reorderedPhotos.splice(result.destination.index, 0, removed);
 
-    // Update local state
-    setExistingPhotos(reorderedPhotos.map((photo, index) => ({
-      ...photo,
-      sortOrder: index
-    })));
+    // Ensure photos are properly structured objects
+    const updatedPhotos = reorderedPhotos.map((photo, index) => {
+      // Handle string URLs (convert to proper PhotoData object)
+      if (typeof photo === 'string') {
+        return {
+          id: `photo-${index}`,
+          url: photo,
+          fileName: `photo-${index}.jpg`,
+          uploadedAt: new Date().toISOString(),
+          sortOrder: index
+        };
+      }
+      
+      // Handle existing PhotoData objects
+      if (photo && typeof photo === 'object') {
+        return {
+          id: photo.id || `photo-${index}`,
+          url: photo.url || '',
+          fileName: photo.fileName || `photo-${index}.jpg`,
+          uploadedAt: photo.uploadedAt || new Date().toISOString(),
+          sortOrder: index
+        };
+      }
 
-    // Update in Firebase
+      // Fallback case (shouldn't happen)
+      return {
+        id: `photo-${index}`,
+        url: '',
+        fileName: `photo-${index}.jpg`,
+        uploadedAt: new Date().toISOString(),
+        sortOrder: index
+      };
+    });
+
+    // Update local state with properly structured objects
+    setExistingPhotos(updatedPhotos);
+
+    // Update in Firebase with the properly structured array
     if (editId && editId !== 'new') {
-      updatePhotoOrder('ceylonstays', editId, reorderedPhotos);
+      updatePhotoOrder(editId, updatedPhotos);
     }
   };
 
@@ -518,11 +466,17 @@ export default function UploadPage() {
     if (!editId || editId === 'new') return;
 
     try {
-      await deletePhoto('ceylonstays', editId, photoId);
+      await deletePhoto(editId, photoId);
       setExistingPhotos(prev => prev.filter(p => p.id !== photoId));
     } catch (error) {
       console.error('Error deleting photo:', error);
     }
+  };
+
+  // Add this helper function to handle photo URLs
+  const getPhotoUrl = (photo: string | PhotoData) => {
+    if (typeof photo === 'string') return photo;
+    return photo.url;
   };
 
   // Show password screen first
@@ -540,9 +494,7 @@ export default function UploadPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-gray-600">Authenticating...</div>
-        </div>
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
       </div>
     );
   }
@@ -696,52 +648,6 @@ export default function UploadPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Photos
               </label>
-              {existingPhotos.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold mb-2">Current Photos</h3>
-                  <DragDropContext onDragEnd={handleReorderPhotos}>
-                    <Droppable droppableId="photos" direction="horizontal">
-                      {(provided: DroppableProvided) => (
-                        <div 
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
-                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-                        >
-                          {existingPhotos.map((photo, index) => (
-                            <Draggable key={photo.id} draggableId={photo.id} index={index}>
-                              {(provided: DraggableProvided) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  className="relative group aspect-[4/3]"
-                                >
-                                  <Image
-                                    src={photo.url}
-                                    alt={`Property photo ${index + 1}`}
-                                    fill
-                                    loader={imageLoader}
-                                    className="object-cover rounded-lg"
-                                  />
-                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg">
-                                    <button
-                                      onClick={() => handleDeletePhoto(photo.id)}
-                                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
-                        </div>
-                      )}
-                    </Droppable>
-                  </DragDropContext>
-                </div>
-              )}
               <input
                 type="file"
                 accept="image/*"
@@ -755,43 +661,109 @@ export default function UploadPage() {
                   hover:file:bg-indigo-100
                   focus:outline-none"
               />
-              {selectedFiles.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-lg font-semibold mb-2">New Photos</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {selectedFiles.map((file, index) => (
-                      <div
-                        key={`new-${index}`}
-                        className={`relative group cursor-move ${
-                          isDragging ? 'transition-transform duration-200' : ''
-                        }`}
-                        draggable
-                        onDragStart={() => handleDragStart('new', index)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => handleDragOver(e, 'new', index)}
+              <div className="mt-4">
+                <DragDropContext onDragEnd={handleReorderPhotos}>
+                  <Droppable droppableId="photos" direction="horizontal">
+                    {(provided) => (
+                      <div 
+                        {...provided.droppableProps}
+                        ref={provided.innerRef}
+                        className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
                       >
-                        <div className="relative aspect-[4/3]">
-                          <Image
-                            src={URL.createObjectURL(file)}
-                            alt={`New photo ${index + 1}`}
-                            fill
-                            className="object-cover rounded-lg"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg">
-                            <GripVertical className="absolute top-2 left-2 text-white opacity-0 group-hover:opacity-100" />
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ×
-                        </button>
+                        {existingPhotos.map((photo, index) => (
+                          <Draggable 
+                            key={photo.id || `existing-${index}`}
+                            draggableId={photo.id || `existing-${index}`}
+                            index={index}
+                          >
+                            {(provided) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className="relative group aspect-[4/3]"
+                              >
+                                <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 rounded-lg">
+                                  <div className="absolute top-2 left-2 z-10 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                                    {index === 0 ? 'Cover' : `Photo ${index + 1}`}
+                                  </div>
+                                  <div className="absolute top-2 right-2 z-10 bg-black/50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <GripVertical className="h-4 w-4" />
+                                  </div>
+                                  {(() => {
+                                    const photoUrl = typeof photo === 'string' ? photo : photo?.url;
+                                    return photoUrl ? (
+                                      <Image
+                                        src={photoUrl}
+                                        alt={`Property photo ${index + 1}`}
+                                        fill
+                                        unoptimized
+                                        className="object-cover"
+                                        onError={(e) => {
+                                          console.error('Image load error for photo:', index, 'URL:', photoUrl);
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="h-full w-full flex items-center justify-center">
+                                        <span className="text-gray-400">No photo</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                                <button
+                                  onClick={() => handleDeletePhoto(photo.id)}
+                                  className="absolute bottom-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {selectedFiles.map((file, index) => (
+                          <Draggable 
+                            key={`new-${index}`}
+                            draggableId={`new-${index}`}
+                            index={existingPhotos.length + index}
+                          >
+                            {(provided) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className="relative group aspect-[4/3]"
+                              >
+                                <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 rounded-lg">
+                                  <div className="absolute top-2 left-2 z-10 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                                    {existingPhotos.length + index === 0 ? 'Cover' : `Photo ${existingPhotos.length + index + 1}`}
+                                  </div>
+                                  <div className="absolute top-2 right-2 z-10 bg-black/50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <GripVertical className="h-4 w-4" />
+                                  </div>
+                                  <Image
+                                    src={URL.createObjectURL(file)}
+                                    alt={`New photo ${index + 1}`}
+                                    fill
+                                    unoptimized
+                                    className="object-cover"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => removeFile(index)}
+                                  className="absolute bottom-2 right-2 p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    )}
+                  </Droppable>
+                </DragDropContext>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -870,97 +842,121 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Manage Listings</h1>
+    <main className="min-h-screen bg-gray-50/50 p-8">
+      {!isPasswordVerified ? (
+        <ClientOnlyPasswordForm
+          onSubmit={handlePasscodeSubmit}
+          passcode={passcode}
+          setPasscode={setPasscode}
+        />
+      ) : !isAuthenticated ? (
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gray-900"></div>
+        </div>
+      ) : (
+        <div className="container mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold">Manage Listings</h1>
             <button
               onClick={() => setEditId('new')}
-              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-5 w-5 mr-2" />
               Add New Listing
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Photo</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rooms</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Available</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {listings.map((listing) => (
-                  <tr key={listing.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {listing.photos && listing.photos.length > 0 ? (
-                        <div className="relative h-16 w-20">
-                          <Image
-                            src={listing.photos[0].url}
-                            alt={listing.title}
-                            fill
-                            loader={imageLoader}
-                            className="object-cover rounded-md"
-                          />
-                        </div>
-                      ) : (
-                        <div className="h-16 w-20 bg-gray-100 rounded-md flex items-center justify-center">
-                          <div className="text-gray-400 text-xs">No photo</div>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{listing.title}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{listing.location}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      ${listing.pricingType === 'night' ? listing.pricePerNight : listing.pricePerMonth}
-                      <span className="text-xs text-gray-400 ml-1">
-                        /{listing.pricingType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {listing.bedrooms}b {listing.bathrooms}ba
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleListingToggle(listing.id, listing.isListed)}
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          listing.isListed
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                            : 'bg-red-100 text-red-800 hover:bg-red-200'
-                        }`}
-                      >
-                        {listing.isListed ? 'Listed' : 'Delisted'}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatAvailableDate(listing.availableDate).replace('Available ', '')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => setEditId(listing.id)}
-                        className="text-indigo-600 hover:text-indigo-900 flex items-center gap-1 ml-auto"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </button>
-                    </td>
+          
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Thumbnail
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Location
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Price
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {listings.map((listing) => {
+                    const thumbnailUrl = listing.photos?.[0]?.url || (typeof listing.photos?.[0] === 'string' ? listing.photos[0] : '');
+                    return (
+                      <tr key={listing.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="h-16 w-16 relative">
+                            {thumbnailUrl ? (
+                              <Image
+                                src={thumbnailUrl}
+                                alt={listing.title}
+                                fill
+                                unoptimized
+                                className="object-cover rounded"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-gray-200 rounded flex items-center justify-center">
+                                <span className="text-gray-400 text-xs">No image</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-medium text-gray-900">{listing.title}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-500">{listing.location}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900">
+                            ${listing.pricingType === 'night' 
+                              ? listing.pricePerNight?.toLocaleString() 
+                              : listing.pricePerMonth?.toLocaleString()}
+                            <span className="text-gray-500">/{listing.pricingType}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => handleListingToggle(listing.id, listing.isListed)}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                              listing.isListed
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {listing.isListed ? 'Listed' : 'Unlisted'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setEditId(listing.id)}
+                            className="inline-flex items-center text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                          >
+                            <Pencil className="h-4 w-4 mr-1" />
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </main>
   );
 } 
