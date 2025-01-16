@@ -11,6 +11,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { DragDropContext, Droppable, Draggable, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 import dynamic from 'next/dynamic';
+import { imageLoader } from '@/lib/imageLoader';
 
 const PASSCODE = "13579";
 
@@ -719,6 +720,7 @@ export default function UploadPage() {
                                     src={photo.url}
                                     alt={`Property photo ${index + 1}`}
                                     fill
+                                    loader={imageLoader}
                                     className="object-cover rounded-lg"
                                   />
                                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg">
@@ -905,6 +907,7 @@ export default function UploadPage() {
                             src={listing.photos[0].url}
                             alt={listing.title}
                             fill
+                            loader={imageLoader}
                             className="object-cover rounded-md"
                           />
                         </div>
