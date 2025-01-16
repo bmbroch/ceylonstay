@@ -112,21 +112,8 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       console.log('Signed in anonymously');
     }
 
-    console.log('Starting file upload:', {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      path: path
-    });
-
     // Create storage reference
     const storageRef = ref(storage, path);
-    console.log('Storage reference created:', {
-      ref: storageRef.toString(),
-      fullPath: storageRef.fullPath,
-      bucket: storageRef.bucket,
-      name: storageRef.name
-    });
     
     // Add metadata with CORS headers
     const metadata = {
@@ -140,56 +127,27 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
     };
 
     // Upload using Firebase SDK with retry logic
-    try {
-      const snapshot = await uploadBytes(storageRef, file, metadata);
-      console.log('Upload successful:', {
-        ref: snapshot.ref.toString(),
-        fullPath: snapshot.ref.fullPath,
-        bucket: snapshot.ref.bucket,
-        name: snapshot.ref.name,
-        metadata: snapshot.metadata
-      });
-      
-      // Get download URL
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log('Download URL generated:', downloadURL);
-      
-      return {
-        id: crypto.randomUUID(),
-        url: downloadURL,
-        sortOrder: 0, // This will be updated when added to the photos array
-        fileName: path,
-        uploadedAt: new Date().toISOString()
-      };
-    } catch (uploadError: any) {
-      // Retry logic for network errors
-      if (retryCount < 3 && 
-          (uploadError.code === 'storage/network-error' || 
-           uploadError.code === 'storage/retry-limit-exceeded')) {
-        console.log(`Retrying upload (attempt ${retryCount + 1})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return uploadFile(file, path, retryCount + 1);
-      }
-      throw uploadError;
-    }
-  } catch (error: any) {
-    console.error("Error uploading file:", {
-      code: error.code,
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
+    const snapshot = await uploadBytes(storageRef, file, metadata);
+    const downloadUrl = await getDownloadURL(snapshot.ref);
+
+    // Return photo data with alt=media parameter
+    return {
+      id: path.split('/').pop() || '',
+      url: `${downloadUrl}?alt=media`,
+      fileName: file.name,
+      sortOrder: 0,
+      uploadedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('Error uploading file:', error);
     
-    if (error.code === 'storage/unauthorized') {
-      throw new Error('Permission denied. Please check if you are logged in and have proper permissions.');
-    } else if (error.code === 'storage/canceled') {
-      throw new Error('Upload was canceled.');
-    } else if (error.code === 'storage/unknown') {
-      throw new Error('Unknown error occurred during upload. Please try again.');
-    } else if (error.code === 'storage/no-default-bucket') {
-      throw new Error(`Storage bucket not configured. Current bucket: ${storage.app?.options?.storageBucket}`);
+    // Retry logic for transient errors
+    if (retryCount < 3) {
+      console.log(`Retrying upload (attempt ${retryCount + 1})...`);
+      return uploadFile(file, path, retryCount + 1);
     }
-    throw new Error(`Upload failed: ${error.message}`);
+    
+    throw error;
   }
 };
 
