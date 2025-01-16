@@ -20,39 +20,56 @@ function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery, 
   index: number;
 }) {
   const [imagesLoaded, setImagesLoaded] = useState(false);
+  
+  // Handle both string URLs and photo objects
+  const validPhotos = property.photos?.map(photo => 
+    typeof photo === 'string' ? photo : photo?.url
+  ).filter(Boolean) || [];
+  
+  console.log('PropertyImages - property:', property.id, 'photos:', property.photos, 'validPhotos:', validPhotos);
+
+  if (validPhotos.length === 0) {
+    return (
+      <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 flex items-center justify-center">
+        <div className="text-sm text-gray-500">No photos available</div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
       {!imagesLoaded && (
         <div className="absolute inset-0 bg-gray-200 animate-pulse" />
       )}
-      {property.photos.map((photo, idx) => (
-        <div
-          key={idx}
-          className={`absolute inset-0 transition-opacity duration-300 ${
-            activeIndex === idx ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <Image
-            loader={imageLoader}
-            src={photo.url}
-            alt={`${property.title} ${idx + 1}`}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority={index < 3 && idx === 0}
-            loading={index < 3 ? "eager" : "lazy"}
-            quality={75}
-            placeholder="blur"
-            blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDABQODxIPDRQSEBIXFRQdHx4eHRoaHSQtJSEkLzYxMC8vMTQ3PEFGNzhLOj0tRGJFS1NWW1xbOEVnaWVsdlNfYV3/2wBDARUXFx4aHR4eHV3KHy0fyt3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABmX/9k="
-            onLoad={() => {
-              setImagesLoaded(true);
-              console.log('Image URL:', photo.url);
-              console.log('Processed URL:', imageLoader({ src: photo.url, width: 800, quality: 75 }));
-            }}
-          />
-        </div>
-      ))}
+      {validPhotos.map((photoUrl, idx) => {
+        console.log('Rendering photo:', photoUrl, 'for property:', property.id, 'at index:', idx);
+        return (
+          <div
+            key={idx}
+            className={`absolute inset-0 transition-opacity duration-300 ${
+              activeIndex === idx ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <Image
+              src={photoUrl}
+              alt={`${property.title} ${idx + 1}`}
+              fill
+              unoptimized
+              className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority={index < 3 && idx === 0}
+              loading={index < 3 ? "eager" : "lazy"}
+              onLoad={() => {
+                console.log('Image loaded:', photoUrl);
+                setImagesLoaded(true);
+              }}
+              onError={(e) => {
+                console.error('Image load error:', photoUrl, e);
+              }}
+            />
+          </div>
+        );
+      })}
       
       <button
         onClick={(e) => {
@@ -64,10 +81,10 @@ function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery, 
         <Search className="h-4 w-4 text-white" />
       </button>
 
-      {property.photos.length > 1 && (
+      {validPhotos.length > 1 && (
         <>
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
-            {property.photos.map((_, idx) => (
+            {validPhotos.map((_, idx) => (
               <div
                 key={idx}
                 className={`h-1.5 w-1.5 rounded-full ${
@@ -212,6 +229,20 @@ function FullscreenGallery({
   onNext: () => void;
   onPrev: () => void;
 }) {
+  // Handle both string URLs and photo objects
+  const validPhotos = property.photos?.map(photo => 
+    typeof photo === 'string' ? photo : photo?.url
+  ).filter(Boolean) || [];
+  
+  if (validPhotos.length === 0) {
+    return null;
+  }
+
+  const currentPhotoUrl = validPhotos[activeIndex];
+  if (!currentPhotoUrl) {
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       <div className="flex justify-between items-center p-4 text-white">
@@ -227,37 +258,41 @@ function FullscreenGallery({
       <div className="flex-1 relative">
         <div className="absolute inset-0 flex items-center justify-center">
           <Image
-            loader={imageLoader}
-            src={property.photos[activeIndex].url}
+            src={currentPhotoUrl}
             alt={`${property.title} ${activeIndex + 1}`}
             fill
+            unoptimized
             className="object-contain"
             sizes="100vw"
             quality={100}
           />
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70"
-          onClick={onPrev}
-        >
-          <ChevronLeft className="h-8 w-8 text-white" />
-        </Button>
+        {validPhotos.length > 1 && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70"
+              onClick={onPrev}
+            >
+              <ChevronLeft className="h-8 w-8 text-white" />
+            </Button>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70"
-          onClick={onNext}
-        >
-          <ChevronRight className="h-8 w-8 text-white" />
-        </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70"
+              onClick={onNext}
+            >
+              <ChevronRight className="h-8 w-8 text-white" />
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="p-4 text-white text-center">
-        {activeIndex + 1} / {property.photos.length}
+        {activeIndex + 1} / {validPhotos.length}
       </div>
     </div>
   );
@@ -274,6 +309,7 @@ export default function Home() {
     const fetchProperties = async () => {
       try {
         const listings = await getDocuments('ceylonstays') as FirebaseDoc[]
+        console.log('Raw listings from Firebase:', listings);
         const now = new Date()
         now.setHours(0, 0, 0, 0)
 
@@ -281,21 +317,24 @@ export default function Home() {
         const processListings = () => {
           const processed = listings
             .filter(doc => doc.isListed ?? true)
-            .map(doc => ({
-              id: doc.id,
-              title: doc.title || '',
-              description: doc.description || '',
-              location: doc.location || '',
-              bathrooms: doc.bathrooms || 0,
-              bedrooms: doc.bedrooms || 0,
-              pricePerNight: doc.pricePerNight || 0,
-              pricePerMonth: doc.pricePerMonth || 0,
-              pricingType: doc.pricingType || 'night',
-              photos: doc.photos || [],
-              createdAt: doc.createdAt || '',
-              isListed: doc.isListed ?? true,
-              availableDate: doc.availableDate || 'now'
-            }))
+            .map(doc => {
+              console.log('Processing listing:', doc.id, 'Photos:', doc.photos);
+              return {
+                id: doc.id,
+                title: doc.title || '',
+                description: doc.description || '',
+                location: doc.location || '',
+                bathrooms: doc.bathrooms || 0,
+                bedrooms: doc.bedrooms || 0,
+                pricePerNight: doc.pricePerNight || 0,
+                pricePerMonth: doc.pricePerMonth || 0,
+                pricingType: doc.pricingType || 'night',
+                photos: doc.photos || [],
+                createdAt: doc.createdAt || '',
+                isListed: doc.isListed ?? true,
+                availableDate: doc.availableDate || 'now'
+              }
+            })
             .sort((a, b) => {
               // Parse dates, defaulting to now if invalid
               const dateA = new Date(a.availableDate)
@@ -315,6 +354,7 @@ export default function Home() {
               return validDateA.getTime() - validDateB.getTime()
             });
 
+          console.log('Processed listings:', processed);
           setProperties(processed);
           setIsLoading(false);
         };
@@ -336,18 +376,34 @@ export default function Home() {
 
   // Memoize image navigation functions to prevent unnecessary re-renders
   const nextImage = useCallback((propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    if (!property) return;
+    
+    const validPhotos = property.photos?.map(photo => 
+      typeof photo === 'string' ? photo : photo?.url
+    ).filter(Boolean) || [];
+    if (validPhotos.length === 0) return;
+
     setActiveImageIndexes(prev => ({
       ...prev,
-      [propertyId]: ((prev[propertyId] || 0) + 1) % properties.find(p => p.id === propertyId)!.photos.length
-    }))
-  }, [properties])
+      [propertyId]: ((prev[propertyId] || 0) + 1) % validPhotos.length
+    }));
+  }, [properties]);
 
   const prevImage = useCallback((propertyId: string) => {
+    const property = properties.find(p => p.id === propertyId);
+    if (!property) return;
+    
+    const validPhotos = property.photos?.map(photo => 
+      typeof photo === 'string' ? photo : photo?.url
+    ).filter(Boolean) || [];
+    if (validPhotos.length === 0) return;
+
     setActiveImageIndexes(prev => ({
       ...prev,
-      [propertyId]: ((prev[propertyId] || 0) - 1 + properties.find(p => p.id === propertyId)!.photos.length) % properties.find(p => p.id === propertyId)!.photos.length
-    }))
-  }, [properties])
+      [propertyId]: ((prev[propertyId] || 0) - 1 + validPhotos.length) % validPhotos.length
+    }));
+  }, [properties]);
 
   const handleToggleStatus = async (propertyId: string, currentStatus: boolean) => {
     try {

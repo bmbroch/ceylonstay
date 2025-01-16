@@ -1,13 +1,24 @@
 import type { ImageLoaderProps } from 'next/image';
 
-export const imageLoader = ({ src, width, quality }: ImageLoaderProps) => {
+export const imageLoader = ({ src, width, quality }: ImageLoaderProps): string => {
+  // Handle undefined or empty src
+  if (!src) {
+    console.warn('Image source is undefined or empty');
+    return '';
+  }
+
   // If it's a Firebase Storage URL
   if (src.startsWith('https://firebasestorage.googleapis.com')) {
-    // Add width and quality parameters
-    const separator = src.includes('?') ? '&' : '?';
-    return `${src}${separator}w=${width}&q=${quality || 75}`;
+    // The URL is already properly formatted with alt=media and token
+    // Just decode it to ensure special characters are handled correctly
+    try {
+      return decodeURIComponent(src);
+    } catch (error) {
+      console.error('Error decoding URL:', error);
+      return src;
+    }
   }
   
-  // For local images (from public directory), return as is
+  // For non-Firebase URLs, return as is
   return src;
 }; 
