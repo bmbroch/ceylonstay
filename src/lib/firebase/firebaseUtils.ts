@@ -95,7 +95,7 @@ export const deleteDocument = (collectionName: string, id: string) =>
   deleteDoc(doc(db, collectionName, id));
 
 // Storage functions
-export const uploadFile = async (file: File, path: string, retryCount = 0) => {
+export const uploadFile = async (file: File, path: string, retryCount = 0): Promise<string> => {
   try {
     // Check if user is authenticated
     if (!auth.currentUser) {
