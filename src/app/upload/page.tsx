@@ -20,7 +20,9 @@ interface DragItem {
   index: number;
 }
 
-interface FormData {
+type PricingType = 'night' | 'month';
+
+interface FormDataType {
   title: string;
   description: string;
   location: string;
@@ -28,10 +30,21 @@ interface FormData {
   bedrooms: number;
   pricePerNight: number;
   pricePerMonth: number;
-  pricingType: 'night' | 'month';
+  pricingType: PricingType;
   availableDate: string;
-  photos: PhotoData[];
 }
+
+const INITIAL_FORM_DATA: FormDataType = {
+  title: "",
+  description: "",
+  location: "",
+  bathrooms: 1,
+  bedrooms: 1,
+  pricePerNight: 0,
+  pricePerMonth: 0,
+  pricingType: 'night',
+  availableDate: ''
+};
 
 export default function UploadPage() {
   const router = useRouter();
@@ -41,17 +54,7 @@ export default function UploadPage() {
   const [passcode, setPasscode] = useState("");
   const [listings, setListings] = useState<Listing[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    location: "",
-    bathrooms: 1,
-    bedrooms: 1,
-    pricePerNight: 0,
-    pricePerMonth: 0,
-    pricingType: 'night' as 'night' | 'month',
-    availableDate: new Date().toISOString()
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState("");
   const [existingPhotos, setExistingPhotos] = useState<PhotoData[]>([]);
@@ -60,6 +63,16 @@ export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  // Initialize form data with current date after mount
+  useEffect(() => {
+    if (formData.availableDate === '') {
+      setFormData(prev => ({
+        ...prev,
+        availableDate: new Date().toISOString()
+      }));
+    }
+  }, [formData.availableDate]);
 
   // Add authentication effect - only run after password is verified
   useEffect(() => {
@@ -137,7 +150,7 @@ export default function UploadPage() {
     loadListings();
   }, [isAuthenticated]);
 
-  // Load existing listing data if in edit mode
+  // Load listing data after authentication
   useEffect(() => {
     const loadListing = async () => {
       if (editId && editId !== 'new' && isAuthenticated) {
@@ -145,9 +158,11 @@ export default function UploadPage() {
           const listing = await getDocument('ceylonstays', editId);
           if (listing) {
             // Default to current date if no date or invalid date
-            let availableDate;
+            let availableDate = '';
             try {
-              availableDate = listing.availableDate ? new Date(listing.availableDate).toISOString() : new Date().toISOString();
+              availableDate = listing.availableDate === 'now' 
+                ? new Date().toISOString() 
+                : new Date(listing.availableDate).toISOString();
             } catch (error) {
               availableDate = new Date().toISOString();
             }
@@ -161,7 +176,7 @@ export default function UploadPage() {
               pricePerNight: listing.pricePerNight || 0,
               pricePerMonth: listing.pricePerMonth || 0,
               pricingType: listing.pricingType || 'night',
-              availableDate: availableDate
+              availableDate
             });
             setExistingPhotos(listing.photos || []);
           }
@@ -188,19 +203,12 @@ export default function UploadPage() {
 
   const resetForm = () => {
     setFormData({
-      title: "",
-      description: "",
-      location: "",
-      bathrooms: 1,
-      bedrooms: 1,
-      pricePerNight: 0,
-      pricePerMonth: 0,
-      pricingType: 'night',
+      ...INITIAL_FORM_DATA,
       availableDate: new Date().toISOString()
     });
     setSelectedFiles([]);
     setExistingPhotos([]);
-    setUploadError("");
+    setUploadError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
