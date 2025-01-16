@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc } from "@/lib/firebase/firebaseUtils";
+import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc, PhotoData, updatePhotoOrder, deletePhoto } from "@/lib/firebase/firebaseUtils";
 import { auth } from "@/lib/firebase/firebase";
 import { signInAnonymously } from "firebase/auth";
-import { Pencil, Plus, CalendarIcon, GripVertical } from "lucide-react";
+import { Pencil, Plus, CalendarIcon, GripVertical, X } from "lucide-react";
 import Image from "next/image";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import { DragDropContext, Droppable, Draggable, DroppableProvided, DraggableProvided } from '@hello-pangea/dnd';
 
 const PASSCODE = "13579";
 
@@ -17,6 +18,19 @@ interface Listing extends FirebaseDoc {}
 interface DragItem {
   type: 'existing' | 'new';
   index: number;
+}
+
+interface FormData {
+  title: string;
+  description: string;
+  location: string;
+  bathrooms: number;
+  bedrooms: number;
+  pricePerNight: number;
+  pricePerMonth: number;
+  pricingType: 'night' | 'month';
+  availableDate: string;
+  photos: PhotoData[];
 }
 
 export default function UploadPage() {
@@ -40,7 +54,7 @@ export default function UploadPage() {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadError, setUploadError] = useState("");
-  const [existingPhotos, setExistingPhotos] = useState<string[]>([]);
+  const [existingPhotos, setExistingPhotos] = useState<PhotoData[]>([]);
   const [draggedItem, setDraggedItem] = useState<DragItem | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -191,54 +205,35 @@ export default function UploadPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsUploading(true);
-    setError(null);
+    setIsLoading(true);
+    setUploadError('');
 
     try {
-      // Validate that we have either existing photos or new photos
-      if (selectedFiles.length === 0 && existingPhotos.length === 0) {
-        throw new Error('Please select at least one photo');
-      }
-
-      // Upload new photos if any
-      let newPhotoUrls: string[] = [];
-      if (selectedFiles.length > 0) {
-        const uploadPromises = selectedFiles.map(async (file) => {
-          const timestamp = Date.now();
-          const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-          const path = `listings/${timestamp}-${safeFileName}`;
-          
-          console.log('Starting upload for file:', {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            path: path
-          });
-
+      // Upload new photos
+      const uploadedPhotos = await Promise.all(
+        selectedFiles.map(async (file) => {
+          const path = `properties/${Date.now()}_${file.name}`;
           return uploadFile(file, path);
-        });
+        })
+      );
 
-        newPhotoUrls = await Promise.all(uploadPromises);
-        console.log('All files uploaded successfully:', newPhotoUrls);
-      }
+      // Combine existing and new photos, maintaining order
+      const allPhotos = [...existingPhotos, ...uploadedPhotos].map((photo, index) => ({
+        ...photo,
+        sortOrder: index
+      }));
 
-      // Combine existing photos and new photos
-      const allPhotos = [...existingPhotos, ...newPhotoUrls];
-
-      // Prepare listing data
-      const listingData = {
+      const data = {
         ...formData,
         photos: allPhotos,
-        createdAt: new Date().toISOString(),
-        isListed: true,
         updatedAt: new Date().toISOString()
       };
 
       // Save to Firestore
       if (editId && editId !== 'new') {
-        await updateDocument('ceylonstays', editId, listingData);
+        await updateDocument('ceylonstays', editId, data);
       } else {
-        await addDocument('ceylonstays', listingData);
+        await addDocument('ceylonstays', data);
       }
 
       // Reset form and state
@@ -267,11 +262,11 @@ export default function UploadPage() {
         } as Listing));
       setListings(sortedListings);
 
-    } catch (error: any) {
-      console.error('Submission error:', error);
-      setError(error.message || 'Failed to save listing');
+    } catch (error) {
+      console.error('Error:', error);
+      setUploadError('Failed to upload. Please try again.');
     } finally {
-      setIsUploading(false);
+      setIsLoading(false);
     }
   };
 
@@ -435,6 +430,38 @@ export default function UploadPage() {
       newFiles.splice(index, 0, movedItem);
       setSelectedFiles(newFiles);
       setDraggedItem({ type: 'new', index });
+    }
+  };
+
+  // Add reorder function
+  const handleReorderPhotos = (result: any) => {
+    if (!result.destination) return;
+
+    const reorderedPhotos = Array.from(existingPhotos);
+    const [removed] = reorderedPhotos.splice(result.source.index, 1);
+    reorderedPhotos.splice(result.destination.index, 0, removed);
+
+    // Update local state
+    setExistingPhotos(reorderedPhotos.map((photo, index) => ({
+      ...photo,
+      sortOrder: index
+    })));
+
+    // Update in Firebase
+    if (editId && editId !== 'new') {
+      updatePhotoOrder('ceylonstays', editId, reorderedPhotos);
+    }
+  };
+
+  // Add delete function
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!editId || editId === 'new') return;
+
+    try {
+      await deletePhoto('ceylonstays', editId, photoId);
+      setExistingPhotos(prev => prev.filter(p => p.id !== photoId));
+    } catch (error) {
+      console.error('Error deleting photo:', error);
     }
   };
 
@@ -642,38 +669,46 @@ export default function UploadPage() {
               {existingPhotos.length > 0 && (
                 <div className="mt-4">
                   <h3 className="text-lg font-semibold mb-2">Current Photos</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {existingPhotos.map((photo, index) => (
-                      <div
-                        key={`existing-${index}`}
-                        className={`relative group cursor-move ${
-                          isDragging ? 'transition-transform duration-200' : ''
-                        }`}
-                        draggable
-                        onDragStart={() => handleDragStart('existing', index)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => handleDragOver(e, 'existing', index)}
-                      >
-                        <div className="relative aspect-[4/3]">
-                          <Image
-                            src={photo}
-                            alt={`Existing photo ${index + 1}`}
-                            fill
-                            className="object-cover rounded-lg"
-                          />
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg">
-                            <GripVertical className="absolute top-2 left-2 text-white opacity-0 group-hover:opacity-100" />
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => removeExistingPhoto(index)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  <DragDropContext onDragEnd={handleReorderPhotos}>
+                    <Droppable droppableId="photos" direction="horizontal">
+                      {(provided: DroppableProvided) => (
+                        <div 
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                          {existingPhotos.map((photo, index) => (
+                            <Draggable key={photo.id} draggableId={photo.id} index={index}>
+                              {(provided: DraggableProvided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className="relative group aspect-[4/3]"
+                                >
+                                  <Image
+                                    src={photo.url}
+                                    alt={`Property photo ${index + 1}`}
+                                    fill
+                                    className="object-cover rounded-lg"
+                                  />
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity rounded-lg">
+                                    <button
+                                      onClick={() => handleDeletePhoto(photo.id)}
+                                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
                 </div>
               )}
               <input
@@ -838,7 +873,7 @@ export default function UploadPage() {
                       {listing.photos && listing.photos.length > 0 ? (
                         <div className="relative h-16 w-20">
                           <Image
-                            src={listing.photos[0]}
+                            src={listing.photos[0].url}
                             alt={listing.title}
                             fill
                             className="object-cover rounded-md"

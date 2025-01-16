@@ -15,7 +15,15 @@ import {
   getDoc,
   DocumentData
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+
+export interface PhotoData {
+  id: string;
+  url: string;
+  sortOrder: number;
+  fileName: string;
+  uploadedAt: string;
+}
 
 export interface FirebaseDoc extends DocumentData {
   id: string;
@@ -27,7 +35,7 @@ export interface FirebaseDoc extends DocumentData {
   pricePerNight?: number;
   pricePerMonth?: number;
   pricingType: 'night' | 'month';
-  photos: string[];
+  photos: PhotoData[];
   createdAt: string;
   isListed: boolean;
   availableDate: string | 'now'; // 'now' or ISO date string
@@ -95,7 +103,7 @@ export const deleteDocument = (collectionName: string, id: string) =>
   deleteDoc(doc(db, collectionName, id));
 
 // Storage functions
-export const uploadFile = async (file: File, path: string, retryCount = 0): Promise<string> => {
+export const uploadFile = async (file: File, path: string, retryCount = 0): Promise<PhotoData> => {
   try {
     // Check if user is authenticated
     if (!auth.currentUser) {
@@ -146,7 +154,13 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       const downloadURL = await getDownloadURL(snapshot.ref);
       console.log('Download URL generated:', downloadURL);
       
-      return downloadURL;
+      return {
+        id: crypto.randomUUID(),
+        url: downloadURL,
+        sortOrder: 0, // This will be updated when added to the photos array
+        fileName: path,
+        uploadedAt: new Date().toISOString()
+      };
     } catch (uploadError: any) {
       // Retry logic for network errors
       if (retryCount < 3 && 
@@ -176,5 +190,58 @@ export const uploadFile = async (file: File, path: string, retryCount = 0): Prom
       throw new Error(`Storage bucket not configured. Current bucket: ${storage.app?.options?.storageBucket}`);
     }
     throw new Error(`Upload failed: ${error.message}`);
+  }
+};
+
+// Add new utility functions for photo management
+export const updatePhotoOrder = async (
+  collectionName: string,
+  docId: string,
+  photos: PhotoData[]
+): Promise<void> => {
+  // Update photos array with new order
+  await updateDocument(collectionName, docId, {
+    photos: photos.map((photo, index) => ({
+      ...photo,
+      sortOrder: index
+    }))
+  });
+};
+
+export const deletePhoto = async (
+  collectionName: string,
+  docId: string,
+  photoId: string
+): Promise<void> => {
+  try {
+    // Get the current document
+    const doc = await getDocument(collectionName, docId);
+    if (!doc) throw new Error('Document not found');
+
+    // Find the photo to delete
+    const photoToDelete = doc.photos.find(p => p.id === photoId);
+    if (!photoToDelete) throw new Error('Photo not found');
+
+    // Delete from Storage
+    const storageRef = ref(storage, photoToDelete.fileName);
+    try {
+      await deleteObject(storageRef);
+    } catch (error) {
+      console.error('Error deleting from storage:', error);
+      // Continue even if storage delete fails
+    }
+
+    // Update Firestore document with filtered photos array
+    const updatedPhotos = doc.photos
+      .filter(p => p.id !== photoId)
+      .map((photo, index) => ({
+        ...photo,
+        sortOrder: index
+      }));
+
+    await updateDocument(collectionName, docId, { photos: updatedPhotos });
+  } catch (error) {
+    console.error('Error deleting photo:', error);
+    throw error;
   }
 };
