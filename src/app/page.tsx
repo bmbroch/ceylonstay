@@ -35,7 +35,7 @@ function PropertyImages({ property, activeIndex, onNext, onPrev, onOpenGallery, 
         >
           <Image
             loader={imageLoader}
-            src={photo}
+            src={photo.url}
             alt={`${property.title} ${idx + 1}`}
             fill
             className="object-cover"
@@ -224,7 +224,7 @@ function FullscreenGallery({
         <div className="absolute inset-0 flex items-center justify-center">
           <Image
             loader={imageLoader}
-            src={property.photos[activeIndex]}
+            src={property.photos[activeIndex].url}
             alt={`${property.title} ${activeIndex + 1}`}
             fill
             className="object-contain"
