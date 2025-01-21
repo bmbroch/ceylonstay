@@ -141,8 +141,11 @@ function PropertyDetails({ property, onShowDescription }: {
       }
       
       // Compare dates without time
-      const isToday = dateObj.toDateString() === today.toDateString();
-      if (isToday) {
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dateObjStart = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      
+      // If date is today or in the past, show "Available now"
+      if (dateObjStart <= todayStart) {
         return { text: 'Available now', isNow: true };
       }
       

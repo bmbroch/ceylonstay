@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { addDocument, uploadFile, getDocument, updateDocument, getDocuments, FirebaseDoc, PhotoData, updatePhotoOrder, deletePhoto, getCollectionName } from "@/lib/firebase/firebaseUtils";
 import { auth } from "@/lib/firebase/firebase";
 import { signInAnonymously } from "firebase/auth";
-import { Pencil, Plus, CalendarIcon, GripVertical, X } from "lucide-react";
+import { Pencil, Plus, CalendarIcon, GripVertical, X, MessageCircle } from "lucide-react";
 import Image from "next/image";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -34,6 +34,7 @@ interface FormDataType {
   pricePerMonth: number;
   pricingType: PricingType;
   availableDate: string;
+  whatsappNumber: string;
 }
 
 const INITIAL_FORM_DATA: FormDataType = {
@@ -45,7 +46,8 @@ const INITIAL_FORM_DATA: FormDataType = {
   pricePerNight: 0,
   pricePerMonth: 0,
   pricingType: 'night',
-  availableDate: ''
+  availableDate: '',
+  whatsappNumber: ''
 };
 
 // Create a separate password component
@@ -228,7 +230,8 @@ export default function UploadPage() {
             pricePerNight: listing.pricePerNight || 0,
             pricePerMonth: listing.pricePerMonth || 0,
             pricingType: listing.pricingType || 'night',
-            availableDate: listing.availableDate || new Date().toISOString()
+            availableDate: listing.availableDate || new Date().toISOString(),
+            whatsappNumber: listing.whatsappNumber || ''
           });
           setExistingPhotos(listing.photos || []);
         }
@@ -263,13 +266,22 @@ export default function UploadPage() {
     setUploadError('');
 
     try {
+      console.log('Starting upload process...');
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('Collection:', process.env.NODE_ENV === 'production' ? 'ceylonstaysproduction' : 'ceylonstays');
+      
+      // First try to upload files
       const uploadPromises = selectedFiles.map(file => {
         const collectionName = process.env.NODE_ENV === 'production' ? 'ceylonstaysproduction' : 'ceylonstays';
         const path = `${collectionName}/${Date.now()}-${file.name}`;
+        console.log('Uploading file to path:', path);
         return uploadFile(file, path);
       });
 
+      console.log('Uploading files...');
       const uploadedPhotos = await Promise.all(uploadPromises);
+      console.log('Files uploaded successfully:', uploadedPhotos);
+
       const allPhotos = [...existingPhotos, ...uploadedPhotos].map((photo, index) => ({
         ...photo,
         sortOrder: index
@@ -281,21 +293,36 @@ export default function UploadPage() {
         updatedAt: new Date().toISOString()
       };
 
+      console.log('Preparing to save document...');
+      console.log('Edit ID:', editId);
+      
       if (editId === 'new') {
-        await addDocument({
+        console.log('Creating new document...');
+        const docRef = await addDocument({
           ...data,
           createdAt: new Date().toISOString(),
           isListed: true
         });
+        console.log('Document created successfully:', docRef);
       } else if (editId) {
+        console.log('Updating existing document:', editId);
         await updateDocument(editId, data);
+        console.log('Document updated successfully');
       }
 
+      console.log('Operation completed successfully');
       resetForm();
       setEditId(null);
       refreshListings();
-    } catch (error) {
-      console.error('Error submitting form:', error);
+    } catch (error: any) {
+      console.error('Error in handleSubmit:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
+      setUploadError(error.message || 'An error occurred while saving the listing');
     } finally {
       setIsLoading(false);
     }
@@ -815,6 +842,21 @@ export default function UploadPage() {
               </div>
             </div>
 
+            <div className="mb-4">
+              <label htmlFor="whatsappNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                WhatsApp Number
+              </label>
+              <input
+                type="tel"
+                id="whatsappNumber"
+                name="whatsappNumber"
+                value={formData.whatsappNumber}
+                onChange={handleChange}
+                placeholder="e.g. 94779598514"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              />
+            </div>
+
             {uploadError && (
               <div className="text-red-500 text-sm">{uploadError}</div>
             )}
@@ -888,6 +930,9 @@ export default function UploadPage() {
                       Status
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      WhatsApp
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
@@ -939,6 +984,21 @@ export default function UploadPage() {
                           >
                             {listing.isListed ? 'Listed' : 'Unlisted'}
                           </button>
+                        </td>
+                        <td className="px-6 py-4">
+                          {listing.whatsappNumber && (
+                            <a
+                              href={`https://wa.me/${listing.whatsappNumber}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block"
+                            >
+                              <MessageCircle 
+                                className="h-5 w-5 text-[#25D366] hover:text-[#128C7E] transition-colors" 
+                                title={`Message ${listing.whatsappNumber}`}
+                              />
+                            </a>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <button
