@@ -992,10 +992,11 @@ export default function UploadPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-block"
+                              title={`Message ${listing.whatsappNumber}`}
                             >
                               <MessageCircle 
-                                className="h-5 w-5 text-[#25D366] hover:text-[#128C7E] transition-colors" 
-                                title={`Message ${listing.whatsappNumber}`}
+                                className="h-5 w-5 text-[#25D366] hover:text-[#128C7E] transition-colors"
+                                aria-label={`Message ${listing.whatsappNumber}`}
                               />
                             </a>
                           )}
