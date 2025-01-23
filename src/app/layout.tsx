@@ -87,10 +87,10 @@ export default function RootLayout({
           {`window.plausible = window.plausible || function() { (window.plausible.q = window.plausible.q || []).push(arguments) }`}
         </Script>
       </head>
-      <body className="min-h-screen bg-white">
+      <body className="min-h-screen bg-[#FFFFFF]">
         <AuthProvider>
           <Header />
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <main className="max-w-7xl mx-auto px-1 sm:px-6 lg:px-8 bg-[#FFFFFF]">
             {children}
           </main>
         </AuthProvider>
