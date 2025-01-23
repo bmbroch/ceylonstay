@@ -416,58 +416,37 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50/50">
-      <div className="container mx-auto px-4 py-8">
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <PropertySkeletonGrid count={6} />
-          </div>
-        ) : properties.length === 0 ? (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-semibold text-gray-900">No listings available</h2>
-            <p className="mt-2 text-gray-600">Check back later for new properties.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* InfoTile first on mobile */}
-            <div className="md:hidden">
-              <InfoTile />
-            </div>
-
-            {/* Properties with InfoTile after second property on desktop */}
-            {properties.reduce((acc: React.ReactNode[], property, index) => {
-              // Add the property card
-              acc.push(
-                <Card key={property.id} className="group overflow-hidden">
-                  <PropertyImages
-                    property={property}
-                    activeIndex={activeImageIndexes[property.id] || 0}
-                    onNext={() => nextImage(property.id)}
-                    onPrev={() => prevImage(property.id)}
-                    onOpenGallery={() => setActiveGallery(property.id)}
-                    index={index}
-                  />
-                  <PropertyDetails
-                    property={property}
-                    onShowDescription={() => setActiveDescription(property.description || null)}
-                  />
-                </Card>
-              );
-              
-              // After the second property, add the InfoTile on desktop
-              if (index === 1) {
-                acc.push(
-                  <div key="info-tile" className="hidden md:block">
-                    <InfoTile />
-                  </div>
-                );
-              }
-              
-              return acc;
-            }, [])}
-          </div>
-        )}
-      </div>
+    <div className="px-1 sm:px-6 lg:px-8 space-y-6">
+      <InfoTile />
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <PropertySkeletonGrid count={6} />
+        </div>
+      ) : properties.length === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-semibold text-gray-900">No listings available</h2>
+          <p className="mt-2 text-gray-600">Check back later for new properties.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {properties.map((property, index) => (
+            <Card key={property.id} className="group overflow-hidden">
+              <PropertyImages
+                property={property}
+                activeIndex={activeImageIndexes[property.id] || 0}
+                onNext={() => nextImage(property.id)}
+                onPrev={() => prevImage(property.id)}
+                onOpenGallery={() => setActiveGallery(property.id)}
+                index={index}
+              />
+              <PropertyDetails
+                property={property}
+                onShowDescription={() => setActiveDescription(property.description || null)}
+              />
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Description Modal */}
       {activeDescription && (
@@ -494,7 +473,7 @@ export default function Home() {
           onPrev={() => prevImage(activeGallery)}
         />
       )}
-    </main>
+    </div>
   )
 }
 
