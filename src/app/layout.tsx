@@ -90,7 +90,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#FFFFFF]">
         <AuthProvider>
           <Header />
-          <main className="max-w-7xl mx-auto px-1 sm:px-6 lg:px-8 bg-[#FFFFFF]">
+          <main className="max-w-7xl mx-auto bg-[#FFFFFF]">
             {children}
           </main>
         </AuthProvider>
