@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, useCallback } from 'react'
+import React, { useState, useEffect, Suspense, useCallback } from 'react'
 import { Heart, ChevronLeft, ChevronRight, Info, Search, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { imageLoader } from '@/lib/imageLoader'
 import { PropertySkeletonGrid } from '@/components/ui/property-skeleton'
 import { useRouter } from 'next/navigation'
+import InfoTile from '@/app/components/InfoTile'
 
 interface Property extends FirebaseDoc {}
 
@@ -428,22 +429,42 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {properties.map((property, index) => (
-              <Card key={property.id} className="group overflow-hidden">
-                <PropertyImages
-                  property={property}
-                  activeIndex={activeImageIndexes[property.id] || 0}
-                  onNext={() => nextImage(property.id)}
-                  onPrev={() => prevImage(property.id)}
-                  onOpenGallery={() => setActiveGallery(property.id)}
-                  index={index}
-                />
-                <PropertyDetails
-                  property={property}
-                  onShowDescription={() => setActiveDescription(property.description || null)}
-                />
-              </Card>
-            ))}
+            {/* InfoTile first on mobile */}
+            <div className="md:hidden">
+              <InfoTile />
+            </div>
+
+            {/* Properties with InfoTile after second property on desktop */}
+            {properties.reduce((acc: React.ReactNode[], property, index) => {
+              // Add the property card
+              acc.push(
+                <Card key={property.id} className="group overflow-hidden">
+                  <PropertyImages
+                    property={property}
+                    activeIndex={activeImageIndexes[property.id] || 0}
+                    onNext={() => nextImage(property.id)}
+                    onPrev={() => prevImage(property.id)}
+                    onOpenGallery={() => setActiveGallery(property.id)}
+                    index={index}
+                  />
+                  <PropertyDetails
+                    property={property}
+                    onShowDescription={() => setActiveDescription(property.description || null)}
+                  />
+                </Card>
+              );
+              
+              // After the second property, add the InfoTile on desktop
+              if (index === 1) {
+                acc.push(
+                  <div key="info-tile" className="hidden md:block">
+                    <InfoTile />
+                  </div>
+                );
+              }
+              
+              return acc;
+            }, [])}
           </div>
         )}
       </div>
